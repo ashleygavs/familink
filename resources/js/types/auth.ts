@@ -10,8 +10,13 @@ export type User = {
     [key: string]: unknown;
 };
 
+export type RoleName = 'super_admin' | 'admin' | 'stakeholder' | 'user';
+
 export type Auth = {
     user: User;
+    role_name: RoleName | null;
+    barangay_id: number | null;
+    barangay_name: string | null;
 };
 
 export type Passkey = {
