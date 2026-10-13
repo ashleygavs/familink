@@ -2,6 +2,7 @@ import {
     BarChart3,
     Building2,
     CheckCircle2,
+    Contact,
     LayoutDashboard,
     Lightbulb,
     PackageCheck,
@@ -10,6 +11,7 @@ import {
     Users,
 } from 'lucide-react';
 import { dashboard } from '@/routes';
+import { index as residentsIndex } from '@/routes/residents';
 import {
     approvals,
     events,
@@ -58,6 +60,13 @@ const roleNavItems: RoleNavItem[] = [
         roles: ['user'],
     },
     {
+        title: 'Residents',
+        href: residentsIndex(),
+        icon: Contact,
+        description: 'Find a resident and print their QR card.',
+        roles: ['user', 'admin'],
+    },
+    {
         title: 'Scan QR Code',
         href: scanner(),
         icon: QrCode,
@@ -89,8 +98,9 @@ const roleNavItems: RoleNavItem[] = [
         title: 'Analytics',
         href: analytics(),
         icon: BarChart3,
-        description: 'View reports and family trees.',
-        roles: ['stakeholder'],
+        description:
+            'See how relief reached each barangay, and open family trees.',
+        roles: ['stakeholder', 'admin'],
     },
     {
         title: 'Users',

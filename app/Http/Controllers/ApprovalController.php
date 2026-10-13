@@ -41,6 +41,7 @@ class ApprovalController extends Controller
                 'civil_status' => $resident->civil_status,
                 'household_role' => $resident->household_role,
                 'barangay_name' => $resident->barangay?->name,
+                'household_id' => $resident->household_id,
                 'household_code' => $resident->household?->household_code,
                 'father_name' => $resident->father?->full_name,
                 'mother_name' => $resident->mother?->full_name,

@@ -6,6 +6,7 @@ import {
     ChevronRight,
     Clock,
     Home,
+    Network,
     Unlink,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -21,6 +22,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { formatDate } from '@/lib/format';
+import { familyTree } from '@/routes';
 import { approvals } from '@/routes/admin';
 import type { Paginated, PendingResident } from '@/types';
 
@@ -168,6 +170,17 @@ export default function Approvals({
                                                     ? ` (${resident.household_role})`
                                                     : ''}
                                             </span>
+                                            {resident.household_id && (
+                                                <Link
+                                                    href={familyTree(
+                                                        resident.household_id,
+                                                    )}
+                                                    className="mt-1 flex items-center gap-1 text-blue-700 underline-offset-2 hover:underline dark:text-sky-300"
+                                                >
+                                                    <Network className="size-4" />
+                                                    View family tree
+                                                </Link>
+                                            )}
                                         </Detail>
                                         <Detail label="Father">
                                             {resident.father_name ? (

@@ -13,6 +13,8 @@ void createInertiaApp({
     layout: (name) => {
         switch (true) {
             case name === 'welcome':
+            // A plain sheet for printing QR cards, without the menu.
+            case name === 'residents/qr-cards':
                 return null;
             case name.startsWith('auth/'):
                 return AuthLayout;

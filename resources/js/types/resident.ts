@@ -44,6 +44,7 @@ export type PendingResident = {
     civil_status: string;
     household_role: string | null;
     barangay_name: string | null;
+    household_id: number | null;
     household_code: string | null;
     father_name: string | null;
     mother_name: string | null;

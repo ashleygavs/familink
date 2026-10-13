@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\RoleName;
+use App\Models\Barangay;
 use App\Models\Household;
 use App\Models\User;
 
@@ -9,7 +10,6 @@ dataset('role_routes', [
     'encoder scanner' => [RoleName::User, '/encoder/scanner'],
     'admin approvals' => [RoleName::Admin, '/admin/approvals'],
     'admin events' => [RoleName::Admin, '/admin/events'],
-    'stakeholder analytics' => [RoleName::Stakeholder, '/reports/analytics'],
     'admin users' => [RoleName::Admin, '/admin/users'],
     'super admin municipalities' => [RoleName::SuperAdmin, '/admin/municipalities'],
 ]);
@@ -42,22 +42,18 @@ it('forbids users without a role from restricted pages', function () {
     $this->actingAs(User::factory()->create())->get('/admin/users')->assertForbidden();
 });
 
-it('limits the family tree to stakeholders', function () {
+it('limits the family tree to stakeholders, admins of that barangay and super admins', function () {
     $household = Household::factory()->create();
+    $foreign = Household::factory()->create(['barangay_id' => Barangay::factory()]);
+    $admin = User::factory()->withRole(RoleName::Admin)->create();
 
-    $this->actingAs(User::factory()->withRole(RoleName::Stakeholder)->create())
-        ->get("/family-tree/{$household->id}")
-        ->assertOk();
+    foreach ([User::factory()->withRole(RoleName::Stakeholder)->create(), User::factory()->withRole(RoleName::SuperAdmin)->create(), $admin] as $user) {
+        $this->actingAs($user)->get("/family-tree/{$household->id}")->assertOk();
+    }
 
-    $this->actingAs(User::factory()->withRole(RoleName::SuperAdmin)->create())
-        ->get("/family-tree/{$household->id}")
-        ->assertOk();
-
-    $this->actingAs(User::factory()->withRole(RoleName::Admin)->create())
-        ->get("/family-tree/{$household->id}")
-        ->assertForbidden();
+    $this->actingAs($admin)->get("/family-tree/{$foreign->id}")->assertForbidden();
+    $this->actingAs(User::factory()->withRole(RoleName::User)->create())->get("/family-tree/{$household->id}")->assertForbidden();
 });
-
 it('redirects guests to the login page', function () {
     $this->get('/admin/users')->assertRedirect(route('login'));
 });

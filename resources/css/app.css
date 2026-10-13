@@ -148,7 +148,9 @@
     }
 
     #print-qr,
-    #print-qr * {
+    #print-qr *,
+    #print-cards,
+    #print-cards * {
         visibility: visible;
     }
 }

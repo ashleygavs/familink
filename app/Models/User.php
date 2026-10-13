@@ -115,6 +115,23 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
         return $this->barangay?->name === null ? 'No barangay assigned' : 'Barangay '.$this->barangay->name;
     }
 
+    /**
+     * The municipalities this user works in, for relief events: null means all of them. An admin has their
+     * assigned municipality and an encoder the municipality of their barangay.
+     *
+     * @return list<int>|null
+     */
+    public function accessibleMunicipalityIds(): ?array
+    {
+        if ($this->hasRole(RoleName::SuperAdmin, RoleName::Stakeholder)) {
+            return null;
+        }
+
+        $id = $this->hasRole(RoleName::Admin) ? $this->municipality_id : $this->barangay?->municipality_id;
+
+        return $id === null ? [] : [$id];
+    }
+
     public function canAccessBarangay(?int $barangayId): bool
     {
         $ids = $this->accessibleBarangayIds();
