@@ -5,7 +5,11 @@ import { useEffect, useState } from 'react';
  * Requests are debounced and cancelled when the url changes again; a null url
  * means "not ready yet".
  */
-export function useJsonQuery<T>(url: string | null, debounceMs = 350) {
+export function useJsonQuery<T>(
+    url: string | null,
+    debounceMs = 350,
+    keepPrevious = false,
+) {
     const [found, setFound] = useState<{ url: string; data: T } | null>(null);
     const [failedUrl, setFailedUrl] = useState<string | null>(null);
 
@@ -45,7 +49,11 @@ export function useJsonQuery<T>(url: string | null, debounceMs = 350) {
         };
     }, [url, debounceMs]);
 
-    const data = url !== null && found?.url === url ? found.data : null;
+    const current = url !== null && found?.url === url ? found.data : null;
+    // While a refresh loads, keep showing the previous results so the screen does not flicker.
+    const data =
+        current ??
+        (keepPrevious && url !== null ? (found?.data ?? null) : null);
 
     return {
         data,

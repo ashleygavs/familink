@@ -4,8 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Actions\Residents\FindFamilyMatches;
 use App\Actions\Residents\LinkRelatives;
+use App\Actions\Residents\RecordSuggestionFeedback;
+use App\Actions\Residents\UnlinkRelative;
+use App\Enums\RelativeKind;
 use App\Enums\ResidentStatus;
 use App\Http\Requests\LinkRelativesRequest;
+use App\Http\Requests\SuggestionFeedbackRequest;
+use App\Http\Requests\UnlinkRelativeRequest;
 use App\Http\Resources\FamilySuggestionsResource;
 use App\Models\RelativeLink;
 use App\Models\Resident;
@@ -19,10 +24,11 @@ class ApprovalController extends Controller
     /**
      * List residents waiting for approval, oldest first, with suggested family links.
      */
-    public function index(FindFamilyMatches $findFamilyMatches): Response
+    public function index(Request $request, FindFamilyMatches $findFamilyMatches, RecordSuggestionFeedback $feedback): Response
     {
         $pending = Resident::query()
-            ->with(['barangay', 'household', 'father', 'mother'])
+            ->visibleTo($request->user())
+            ->with(['barangay', 'household', 'father', 'mother', 'spouse', 'childrenAsFather', 'childrenAsMother'])
             ->where('status', ResidentStatus::Pending->value)
             ->oldest()
             ->paginate(10)
@@ -38,9 +44,13 @@ class ApprovalController extends Controller
                 'household_code' => $resident->household?->household_code,
                 'father_name' => $resident->father?->full_name,
                 'mother_name' => $resident->mother?->full_name,
+                'spouse_name' => $resident->spouse?->full_name,
+                'children' => $resident->childrenAsFather->merge($resident->childrenAsMother)->unique('id')
+                    ->map(fn (Resident $child): array => ['id' => $child->id, 'full_name' => $child->full_name])
+                    ->values()->all(),
                 'registered_at' => $resident->created_at?->toIso8601String(),
                 'declared_relatives' => $this->declaredRelatives($resident),
-                'suggestions' => $this->suggestionsFor($findFamilyMatches, $resident),
+                'suggestions' => $this->suggestionsFor($findFamilyMatches, $feedback, $resident),
             ]);
 
         return Inertia::render('admin/approvals', ['pending' => $pending]);
@@ -59,19 +69,48 @@ class ApprovalController extends Controller
     /**
      * Confirm suggested family links for a pending resident.
      */
-    public function links(LinkRelativesRequest $request, Resident $resident, LinkRelatives $linkRelatives): RedirectResponse
+    public function links(LinkRelativesRequest $request, Resident $resident, LinkRelatives $linkRelatives, RecordSuggestionFeedback $feedback): RedirectResponse
     {
+        abort_unless($this->withinScope($request, $resident), 403);
         abort_unless($resident->status === ResidentStatus::Pending, 409, 'This resident is no longer pending.');
 
         $linkRelatives->handle($resident, $request->validated());
+        $feedback->handle($resident, $request->user(), (array) $request->validated('suggestion_feedback', []), 'approval');
 
         return back()->with('success', "Family links saved for {$resident->full_name}.");
     }
 
     /**
+     * Cut a family link that was made by mistake (a parent, spouse, child or named relative).
+     */
+    public function unlink(UnlinkRelativeRequest $request, Resident $resident, UnlinkRelative $unlinkRelative): RedirectResponse
+    {
+        abort_unless($this->withinScope($request, $resident), 403);
+        abort_unless($resident->status === ResidentStatus::Pending, 409, 'This resident is no longer pending.');
+
+        $unlinkRelative->handle($resident, $request->validated('kind'), $request->validated('id'));
+
+        return back()->with('success', "Family link removed for {$resident->full_name}.");
+    }
+
+    /**
+     * Remember the admin's answer to a suggested relative (for example a rejected match, which is then
+     * no longer suggested for this resident).
+     */
+    public function feedback(SuggestionFeedbackRequest $request, Resident $resident, RecordSuggestionFeedback $feedback): RedirectResponse
+    {
+        abort_unless($this->withinScope($request, $resident), 403);
+        abort_unless($resident->status === ResidentStatus::Pending, 409, 'This resident is no longer pending.');
+
+        $feedback->handle($resident, $request->user(), (array) $request->validated('suggestion_feedback'), 'approval');
+
+        return back();
+    }
+
+    /**
      * The relatives the resident named when registering, plus those who named the resident.
      *
-     * @return array<int, array{relation: string, name: string, system_id_no: string}>
+     * @return array<int, array{id: int, relation: string, name: string, system_id_no: string}>
      */
     private function declaredRelatives(Resident $resident): array
     {
@@ -85,6 +124,7 @@ class ApprovalController extends Controller
                 $other = $named ? $link->relative : $link->resident;
 
                 return [
+                    'id' => $link->id,
                     'relation' => ($named ? $link->relation : $link->relation->inverse())->label(),
                     'name' => $other->full_name,
                     'system_id_no' => $other->system_id_no,
@@ -99,8 +139,10 @@ class ApprovalController extends Controller
      *
      * @return array<string, mixed>
      */
-    private function suggestionsFor(FindFamilyMatches $findFamilyMatches, Resident $resident): array
+    private function suggestionsFor(FindFamilyMatches $findFamilyMatches, RecordSuggestionFeedback $feedback, Resident $resident): array
     {
+        $answered = $feedback->rejectedFor($resident);
+
         $matches = $findFamilyMatches->handle([
             'first_name' => $resident->first_name,
             'middle_name' => $resident->middle_name,
@@ -111,7 +153,15 @@ class ApprovalController extends Controller
             'civil_status' => $resident->civil_status,
             'household_id' => $resident->household_id,
             'barangay_id' => $resident->barangay_id,
-        ], null, $resident);
+        ], null, $resident, [
+            'rejected' => [
+                'father' => $answered['father'] ?? [],
+                'mother' => $answered['mother'] ?? [],
+                'spouse' => $answered['spouse'] ?? [],
+                'children' => $answered['children'] ?? [],
+                'relatives' => array_intersect_key($answered, array_flip(RelativeKind::values())),
+            ],
+        ]);
 
         $matches['claims'] = [];
         $matches['relatives'] = [];
@@ -127,6 +177,7 @@ class ApprovalController extends Controller
 
     private function decide(Resident $resident, ResidentStatus $status, Request $request, string $verb): RedirectResponse
     {
+        abort_unless($this->withinScope($request, $resident), 403);
         abort_unless($resident->status === ResidentStatus::Pending, 409, 'This resident is no longer pending.');
 
         $resident->update([
@@ -135,5 +186,13 @@ class ApprovalController extends Controller
         ]);
 
         return back()->with('success', "{$resident->full_name} was {$verb}.");
+    }
+
+    /**
+     * Admins only act on residents of the barangays they handle.
+     */
+    private function withinScope(Request $request, Resident $resident): bool
+    {
+        return Resident::query()->visibleTo($request->user())->whereKey($resident->id)->exists();
     }
 }

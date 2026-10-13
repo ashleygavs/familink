@@ -3,6 +3,7 @@ import FamilySuggestionController from '@/actions/App/Http/Controllers/FamilySug
 import RelativeSuggestionController from '@/actions/App/Http/Controllers/RelativeSuggestionController';
 import { useJsonQuery } from '@/hooks/use-json-query';
 import { RELATIVE_KINDS } from '@/lib/relatives';
+import { FETCH_LIMIT, rejectedParams } from '@/lib/suggestions';
 import type {
     BloodRelatives,
     FamilySuggestions,
@@ -57,7 +58,13 @@ export function suggestionUrl(draft: RegistrationDraft): string | null {
         query.household_id = String(household.household.id);
     }
 
-    return FamilySuggestionController.url({ query });
+    query.limit = String(FETCH_LIMIT);
+
+    const params = new URLSearchParams(query);
+
+    rejectedParams(draft).forEach(([key, value]) => params.append(key, value));
+
+    return `${FamilySuggestionController.url()}?${params.toString()}`;
 }
 
 /**
@@ -116,7 +123,7 @@ export function bloodRelativesUrl(draft: RegistrationDraft): string | null {
  * registered. Requests are debounced and cancelled when the details change.
  */
 export function useFamilySuggestions(url: string | null) {
-    return useJsonQuery<FamilySuggestions>(url, 450);
+    return useJsonQuery<FamilySuggestions>(url, 450, true);
 }
 
 export function useBloodRelatives(url: string | null) {

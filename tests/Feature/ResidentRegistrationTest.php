@@ -187,7 +187,7 @@ it('keeps the previous household when other members remain and clears its head',
 it('rejects dependents that already have that parent, are older, or are in another barangay', function () {
     $hasMother = Resident::factory()->create(['birthdate' => '2010-01-01', 'barangay_id' => $this->barangay->id, 'mother_id' => Resident::factory()->create(['gender' => 'Female'])->id]);
     $older = Resident::factory()->create(['birthdate' => '1980-01-01', 'barangay_id' => $this->barangay->id]);
-    $elsewhere = Resident::factory()->create(['birthdate' => '2010-01-01']);
+    $elsewhere = Resident::factory()->create(['birthdate' => '2010-01-01', 'barangay_id' => Barangay::factory()]);
 
     foreach ([$hasMother, $older, $elsewhere] as $dependent) {
         $this->actingAs($this->encoder)->post(route('encoder.register.store'), registrationPayload(['dependent_ids' => [$dependent->id]]))

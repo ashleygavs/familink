@@ -2,12 +2,16 @@
 
 use App\Enums\RoleName;
 use App\Http\Controllers\ApprovalController;
+use App\Http\Controllers\BarangayController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FamilyRelativesController;
 use App\Http\Controllers\FamilySuggestionController;
 use App\Http\Controllers\HouseholdController;
+use App\Http\Controllers\MunicipalityController;
 use App\Http\Controllers\RelativeSuggestionController;
 use App\Http\Controllers\ResidentController;
+use App\Http\Controllers\SuggestionReportController;
+use App\Http\Controllers\UserController;
 use App\Models\Household;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -33,7 +37,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('approvals/{resident}/approve', [ApprovalController::class, 'approve'])->name('approvals.approve');
         Route::post('approvals/{resident}/archive', [ApprovalController::class, 'archive'])->name('approvals.archive');
         Route::post('approvals/{resident}/links', [ApprovalController::class, 'links'])->name('approvals.links');
+        Route::post('approvals/{resident}/unlink', [ApprovalController::class, 'unlink'])->name('approvals.unlink');
+        Route::post('approvals/{resident}/feedback', [ApprovalController::class, 'feedback'])->name('approvals.feedback');
+        Route::get('suggestion-report', SuggestionReportController::class)->name('suggestion-report');
         Route::inertia('events', 'admin/events')->name('events');
+        Route::get('users', [UserController::class, 'index'])->name('users');
+        Route::post('users', [UserController::class, 'store'])->name('users.store');
+        Route::put('users/{user}', [UserController::class, 'update'])->name('users.update');
     });
 
     Route::middleware('role:'.RoleName::Stakeholder->value)->group(function () {
@@ -44,7 +54,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     Route::middleware('role:'.RoleName::SuperAdmin->value)->group(function () {
-        Route::inertia('admin/users', 'admin/users')->name('admin.users');
+        Route::delete('admin/users/{user}', [UserController::class, 'destroy'])->name('admin.users.destroy');
+        Route::get('admin/municipalities', [MunicipalityController::class, 'index'])->name('admin.municipalities');
+        Route::post('admin/municipalities', [MunicipalityController::class, 'store'])->name('admin.municipalities.store');
+        Route::put('admin/municipalities/{municipality}', [MunicipalityController::class, 'update'])->name('admin.municipalities.update');
+        Route::delete('admin/municipalities/{municipality}', [MunicipalityController::class, 'destroy'])->name('admin.municipalities.destroy');
+        Route::post('admin/barangays', [BarangayController::class, 'store'])->name('admin.barangays.store');
+        Route::put('admin/barangays/{barangay}', [BarangayController::class, 'update'])->name('admin.barangays.update');
+        Route::delete('admin/barangays/{barangay}', [BarangayController::class, 'destroy'])->name('admin.barangays.destroy');
     });
 });
 

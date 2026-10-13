@@ -37,8 +37,12 @@ class DatabaseSeeder extends Seeder
                 'email_verified_at' => now(),
                 'role_id' => Role::query()->where('name', $role->value)->value('id'),
                 'barangay_id' => $barangayId,
+                'municipality_id' => $role === RoleName::Admin ? $sanJose->municipality_id : null,
             ])->save();
         }
+
+        User::query()->where('email', 'admin@familink.test')->first()
+            ?->managedBarangays()->syncWithoutDetaching(Barangay::query()->where('municipality_id', $sanJose->municipality_id)->pluck('id'));
 
         $this->seedTestFamily($sanJose);
     }

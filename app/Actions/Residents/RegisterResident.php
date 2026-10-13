@@ -19,6 +19,7 @@ class RegisterResident
         private GenerateIdentifiers $identifiers,
         private LinkRelatives $linkRelatives,
         private ListRelatives $listRelatives,
+        private RecordSuggestionFeedback $feedback,
     ) {}
 
     /**
@@ -66,6 +67,7 @@ class RegisterResident
         }
 
         $this->declareRelatives($resident, (array) ($data['via_relatives'] ?? []));
+        $this->feedback->handle($resident, $actor, (array) ($data['suggestion_feedback'] ?? []), 'registration');
 
         return $resident;
     }

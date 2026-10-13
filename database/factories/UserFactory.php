@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\RoleName;
+use App\Models\Barangay;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -43,9 +44,21 @@ class UserFactory extends Factory
      */
     public function withRole(RoleName $role): static
     {
-        return $this->state(fn (array $attributes) => [
+        $state = $this->state(fn (array $attributes) => [
             'role_id' => Role::query()->firstOrCreate(['name' => $role->value])->id,
         ]);
+
+        if ($role !== RoleName::Admin) {
+            return $state;
+        }
+
+        // An admin handles the first barangay by default, which is also where household factories place residents.
+        return $state->afterCreating(function (User $user): void {
+            $barangay = Barangay::query()->first() ?? Barangay::factory()->create();
+
+            $user->forceFill(['municipality_id' => $barangay->municipality_id])->save();
+            $user->managedBarangays()->syncWithoutDetaching([$barangay->id]);
+        });
     }
 
     /**

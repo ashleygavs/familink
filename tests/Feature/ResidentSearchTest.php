@@ -43,8 +43,8 @@ it('hides archived residents and limits results to ten', function () {
 it('applies the parent, age and spouse filters', function () {
     $barangay = Barangay::factory()->create();
     $male = Resident::factory()->create(['first_name' => 'Pat', 'gender' => 'Male', 'birthdate' => '1960-01-01', 'barangay_id' => $barangay->id]);
-    Resident::factory()->create(['first_name' => 'Pat', 'gender' => 'Female', 'birthdate' => '1990-01-01']);
-    $withFather = Resident::factory()->create(['first_name' => 'Pat', 'birthdate' => '2012-01-01', 'father_id' => $male->id]);
+    Resident::factory()->create(['first_name' => 'Pat', 'gender' => 'Female', 'birthdate' => '1990-01-01', 'barangay_id' => Barangay::factory()]);
+    $withFather = Resident::factory()->create(['first_name' => 'Pat', 'birthdate' => '2012-01-01', 'father_id' => $male->id, 'barangay_id' => Barangay::factory()]);
 
     $search = fn (array $filters) => $this->actingAs($this->encoder)
         ->getJson(route('encoder.residents.search', ['q' => 'Pat', ...$filters]))
@@ -73,7 +73,7 @@ it('searches households of a single barangay by code, address or head', function
     $mine = Household::factory()->create(['barangay_id' => $barangay->id, 'household_code' => 'HH-SJ-0007', 'street_address' => '5 Mabini St']);
     $head = Resident::factory()->for($mine)->create(['first_name' => 'Carlos', 'barangay_id' => $barangay->id]);
     $mine->update(['head_resident_id' => $head->id]);
-    Household::factory()->create(['household_code' => 'HH-XX-0007']);
+    Household::factory()->create(['household_code' => 'HH-XX-0007', 'barangay_id' => Barangay::factory()]);
 
     foreach (['0007', 'Mabini', 'Carlos'] as $term) {
         $this->actingAs($encoder)->getJson(route('encoder.households.search', ['q' => $term, 'barangay_id' => $barangay->id]))

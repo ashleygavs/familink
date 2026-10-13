@@ -102,6 +102,23 @@ export type FamilySuggestions = {
     relatives: RelativeSuggestion[];
 };
 
+export type FeedbackDecision =
+    | 'accepted'
+    | 'rejected'
+    | 'unsure'
+    | 'reclassified';
+
+/** The answer to one suggested relative, kept so it can be recorded when the registration is saved. */
+export type FeedbackEntry = {
+    candidate_id: number;
+    role: string;
+    decision: FeedbackDecision;
+    reclassified_as?: RelativeKind | null;
+    score: number;
+    confidence: MatchConfidence;
+    reasons: string[];
+};
+
 /** Everything the stepper remembers, so a reload does not lose progress. */
 export type RegistrationDraft = {
     version: number;
@@ -117,6 +134,12 @@ export type RegistrationDraft = {
     dependents: ResidentOption[];
     /** Registered relatives the person knows, used to work out their parents. */
     viaRelatives: Record<RelativeKind, ResidentOption[]>;
+    /** Residents the person said "no" to, by role (father, mother, spouse, children) or relative kind. */
+    rejected: Record<string, number[]>;
+    /** Every answer given to a suggestion (yes, no, not sure, related another way). */
+    answers: FeedbackEntry[];
+    /** Residents the person was not sure about: hidden for now, but not ruled out. */
+    unsure: Record<string, number[]>;
     linkLater: boolean;
     relatives: RelativesDraft;
     household: HouseholdDraft;

@@ -266,6 +266,9 @@ export function buildPayload(
     return {
         ...payload,
         link_later: draft.linkLater,
+        suggestion_feedback: draft.answers.slice(
+            -200,
+        ) as unknown as FormDataConvertible,
         via_relatives: Object.fromEntries(
             Object.entries(draft.viaRelatives)
                 .filter(([, residents]) => residents.length > 0)

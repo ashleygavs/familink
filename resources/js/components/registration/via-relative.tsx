@@ -14,7 +14,7 @@ import type {
     RelativeSuggestion,
     ResidentOption,
 } from '@/types';
-import { MatchCard } from './match-card';
+import { SuggestionList } from './suggestion-list';
 import type { StepProps, SuggestionState } from './step-types';
 
 type Props = Pick<StepProps, 'draft' | 'update' | 'clearErrors'> & {
@@ -48,9 +48,23 @@ export function ViaRelative({
     const fathers = draft.father ? [] : open(parents.data?.father);
     const mothers = draft.mother ? [] : open(parents.data?.mother);
 
-    const likely: RelativeSuggestion[] = (
-        suggestions.data?.relatives ?? []
-    ).filter((match) => !chosenIds.includes(match.resident.id));
+    const merged = new Map<string, RelativeSuggestion>();
+
+    for (const match of [
+        ...(suggestions.data?.relatives ?? []),
+        ...(parents.data?.relatives ?? []),
+    ]) {
+        const key = `${match.relation}:${match.resident.id}`;
+        const existing = merged.get(key);
+
+        if (!existing || match.score > existing.score) {
+            merged.set(key, match);
+        }
+    }
+
+    const likely: RelativeSuggestion[] = [...merged.values()]
+        .filter((match) => !chosenIds.includes(match.resident.id))
+        .sort((a, b) => b.score - a.score);
     const nothingFound =
         !suggestions.loading && likely.length === 0 && !anyChosen;
 
@@ -142,19 +156,16 @@ export function ViaRelative({
                             </ul>
                         )}
 
-                        {suggested.length > 0 && (
-                            <ul className="grid gap-3" aria-live="polite">
-                                {suggested.map((match) => (
-                                    <MatchCard
-                                        key={match.resident.id}
-                                        match={match}
-                                        note={`May be your ${short}`}
-                                        actionLabel={`Yes, my ${short}`}
-                                        onLink={() => add(kind, match.resident)}
-                                    />
-                                ))}
-                            </ul>
-                        )}
+                        <SuggestionList
+                            slot={kind}
+                            matches={suggested}
+                            hiddenIds={chosenIds}
+                            draft={draft}
+                            update={update}
+                            note={() => `May be your ${short}`}
+                            actionLabel={() => `Yes, my ${short}`}
+                            onLink={(match) => add(kind, match.resident)}
+                        />
 
                         <SearchSelect<ResidentOption>
                             id={`via-${kind}`}
@@ -196,49 +207,31 @@ export function ViaRelative({
                     </p>
                 )}
 
-            {fathers.length > 0 && (
-                <div className="grid gap-3">
-                    <h4 className="text-lg font-bold">Possible fathers</h4>
-                    <ul className="grid gap-3">
-                        {fathers.map((match) => (
-                            <MatchCard
-                                key={match.resident.id}
-                                match={match}
-                                actionLabel="Link as my father"
-                                onLink={() => {
-                                    update({
-                                        father: match.resident,
-                                        linkLater: false,
-                                    });
-                                    clearErrors('family', 'father_id');
-                                }}
-                            />
-                        ))}
-                    </ul>
-                </div>
-            )}
+            <SuggestionList
+                slot="father"
+                title="Possible fathers"
+                matches={fathers}
+                draft={draft}
+                update={update}
+                actionLabel={() => 'Yes, my father'}
+                onLink={(match) => {
+                    update({ father: match.resident, linkLater: false });
+                    clearErrors('family', 'father_id');
+                }}
+            />
 
-            {mothers.length > 0 && (
-                <div className="grid gap-3">
-                    <h4 className="text-lg font-bold">Possible mothers</h4>
-                    <ul className="grid gap-3">
-                        {mothers.map((match) => (
-                            <MatchCard
-                                key={match.resident.id}
-                                match={match}
-                                actionLabel="Link as my mother"
-                                onLink={() => {
-                                    update({
-                                        mother: match.resident,
-                                        linkLater: false,
-                                    });
-                                    clearErrors('family', 'mother_id');
-                                }}
-                            />
-                        ))}
-                    </ul>
-                </div>
-            )}
+            <SuggestionList
+                slot="mother"
+                title="Possible mothers"
+                matches={mothers}
+                draft={draft}
+                update={update}
+                actionLabel={() => 'Yes, my mother'}
+                onLink={(match) => {
+                    update({ mother: match.resident, linkLater: false });
+                    clearErrors('family', 'mother_id');
+                }}
+            />
         </section>
     );
 }

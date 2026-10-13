@@ -18,7 +18,7 @@ it('returns suggestions and claims for an encoder, limited to their barangay', f
         'household_id' => $this->household->id, 'barangay_id' => $this->barangay->id,
         'first_name' => 'Juan', 'middle_name' => null, 'last_name' => 'Dela Cruz', 'gender' => 'Male', 'birthdate' => '1980-03-14',
     ]);
-    $elsewhere = Household::factory()->create();
+    $elsewhere = Household::factory()->create(['barangay_id' => Barangay::factory()]);
     Resident::factory()->create([
         'household_id' => $elsewhere->id, 'first_name' => 'Karl', 'last_name' => 'Dela Cruz', 'gender' => 'Male', 'birthdate' => '1979-03-14',
     ]);

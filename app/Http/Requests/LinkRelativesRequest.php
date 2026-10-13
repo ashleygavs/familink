@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Http\Requests\Concerns\ValidatesFamilyLinks;
+use App\Http\Requests\Concerns\ValidatesSuggestionFeedback;
 use App\Models\Resident;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
@@ -10,6 +11,7 @@ use Illuminate\Validation\Validator;
 class LinkRelativesRequest extends FormRequest
 {
     use ValidatesFamilyLinks;
+    use ValidatesSuggestionFeedback;
 
     public function authorize(): bool
     {
@@ -21,7 +23,7 @@ class LinkRelativesRequest extends FormRequest
      */
     public function rules(): array
     {
-        return $this->familyLinkRules($this->resident()->barangay_id);
+        return [...$this->familyLinkRules($this->resident()->barangay_id), ...$this->suggestionFeedbackRules()];
     }
 
     /**

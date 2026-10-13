@@ -2,6 +2,7 @@
 
 namespace App\Actions\Residents;
 
+use App\Actions\Residents\Concerns\PrioritisesLocalCandidates;
 use App\Enums\Gender;
 use App\Enums\ResidentStatus;
 use App\Models\Resident;
@@ -22,9 +23,16 @@ use Illuminate\Support\Carbon;
  */
 class FindFamilyMatches
 {
+    use PrioritisesLocalCandidates;
+
     private const HIGH = 70;
 
     private const MEDIUM = 45;
+
+    private const DEFAULT_LIMIT = 3;
+
+    /** The most candidate rows scored per role, after the database has filtered and ordered them. */
+    private const POOL = 300;
 
     public function __construct(private FindLikelyRelatives $likelyRelatives) {}
 
@@ -32,10 +40,16 @@ class FindFamilyMatches
      * @param  array{first_name?: string|null, middle_name?: string|null, maiden_name?: string|null, last_name?: string|null, birthdate: string, gender?: string|null, civil_status?: string|null, household_id?: int|null, barangay_id?: int|null}  $person
      * @param  int|null  $scopeBarangayId  Limit candidates to this barangay (and relatives listed from it).
      * @param  Resident|null  $subject  The resident being matched, excluded from the results.
+     * @param  array{limit?: int, rejected?: array<string, mixed>}  $options  How many matches to return per role (1 to 12, default 3), and the
+     *                                                                        residents the person already said "no" to, by role (father, mother,
+     *                                                                        spouse, children) and, under "relatives", by relative kind.
      * @return array{claims: list<Claim>, father: list<Match>, mother: list<Match>, spouse: list<Match>, children: list<Match>, relatives: list<Relative>}
      */
-    public function handle(array $person, ?int $scopeBarangayId = null, ?Resident $subject = null): array
+    public function handle(array $person, ?int $scopeBarangayId = null, ?Resident $subject = null, array $options = []): array
     {
+        $ids = fn (mixed $values): array => array_values(array_unique(array_map('intval', (array) $values)));
+        $rejected = (array) ($options['rejected'] ?? []);
+
         $gender = $person['gender'] ?? null;
         $civilStatus = $person['civil_status'] ?? $subject?->civil_status;
         $marriedWoman = $gender === Gender::Female->value
@@ -59,6 +73,14 @@ class FindFamilyMatches
             'barangay_id' => isset($person['barangay_id']) ? (int) $person['barangay_id'] : null,
             'scope' => $scopeBarangayId,
             'subject' => $subject,
+            'limit' => max(1, min(12, (int) ($options['limit'] ?? self::DEFAULT_LIMIT))),
+            'rejected' => [
+                'father' => $ids($rejected['father'] ?? []),
+                'mother' => $ids($rejected['mother'] ?? []),
+                'spouse' => $ids($rejected['spouse'] ?? []),
+                'children' => $ids($rejected['children'] ?? []),
+                'relatives' => array_map($ids, (array) ($rejected['relatives'] ?? [])),
+            ],
         ];
 
         $result = ['claims' => $this->claims($context), 'father' => [], 'mother' => [], 'spouse' => [], 'children' => [], 'relatives' => []];
@@ -94,10 +116,10 @@ class FindFamilyMatches
         $siblings = $this->base($context)
             ->where('last_name_key', $context['parent_surname'])
             ->where(fn (Builder $query) => $query->whereNotNull('father_id')->orWhereNotNull('mother_id'))
-            ->whereDate('birthdate', '>=', $context['birth']->copy()->subYears(20))
-            ->whereDate('birthdate', '<=', $context['birth']->copy()->addYears(20))
-            ->limit(20)
-            ->get();
+            ->where('birthdate', '>=', $context['birth']->copy()->subYears(20)->toDateString())
+            ->where('birthdate', '<=', $context['birth']->copy()->addYears(20)->toDateString());
+
+        $siblings = $this->prioritise($siblings, $context)->limit(20)->get();
 
         $fathers = [];
         $mothers = [];
@@ -135,6 +157,7 @@ class FindFamilyMatches
             ->where('is_deceased', false)
             ->where('last_name_key', $context['last'])
             ->when($context['gender'], fn (Builder $query, string $gender) => $query->where('gender', $gender))
+            ->limit(20)
             ->get();
 
         foreach ($candidates as $candidate) {
@@ -191,15 +214,18 @@ class FindFamilyMatches
     {
         $candidates = $this->base($context)
             ->where('gender', Gender::Male->value)
-            ->whereNotIn('id', $context['excluded_ids'])
+            ->whereNotIn('id', [...$context['excluded_ids'], ...$context['rejected']['father']])
+            ->where('birthdate', '<=', $context['birth']->copy()->subYears(15)->toDateString())
+            ->where('birthdate', '>=', $context['birth']->copy()->subYears(55)->toDateString())
             ->where(function (Builder $query) use ($context): void {
                 $this->surnameOrHousehold($query, $context);
 
                 if ($context['sibling_fathers'] !== []) {
                     $query->orWhereIn('id', array_keys($context['sibling_fathers']));
                 }
-            })
-            ->get();
+            });
+
+        $candidates = $this->prioritise($candidates, $context)->limit(self::POOL)->get();
 
         return $this->rank($candidates, function (Resident $candidate) use ($context): ?array {
             $gap = $this->yearsOlder($candidate, $context['birth']);
@@ -218,7 +244,7 @@ class FindFamilyMatches
             $this->add($score, $reasons, 10, 'Same barangay', $this->sameBarangay($candidate, $context));
 
             return [$score, $reasons];
-        });
+        }, $context['limit']);
     }
 
     /**
@@ -238,7 +264,9 @@ class FindFamilyMatches
 
         $candidates = $this->base($context)
             ->where('gender', Gender::Female->value)
-            ->whereNotIn('id', $context['excluded_ids'])
+            ->whereNotIn('id', [...$context['excluded_ids'], ...$context['rejected']['mother']])
+            ->where('birthdate', '<=', $context['birth']->copy()->subYears(15)->toDateString())
+            ->where('birthdate', '>=', $context['birth']->copy()->subYears(50)->toDateString())
             ->where(function (Builder $query) use ($context, $fatherSpouseIds): void {
                 $query->whereRaw('1 = 0');
 
@@ -261,8 +289,9 @@ class FindFamilyMatches
                 if ($context['sibling_mothers'] !== []) {
                     $query->orWhereIn('id', array_keys($context['sibling_mothers']));
                 }
-            })
-            ->get();
+            });
+
+        $candidates = $this->prioritise($candidates, $context)->limit(self::POOL)->get();
 
         return $this->rank($candidates, function (Resident $candidate) use ($context, $fatherSpouseIds): ?array {
             $gap = $this->yearsOlder($candidate, $context['birth']);
@@ -289,7 +318,7 @@ class FindFamilyMatches
             $this->add($score, $reasons, 10, 'Same barangay', $this->sameBarangay($candidate, $context));
 
             return [$score, $reasons];
-        });
+        }, $context['limit']);
     }
 
     /**
@@ -317,8 +346,11 @@ class FindFamilyMatches
 
         $candidates = $this->base($context)
             ->where('gender', $context['gender'] === Gender::Male->value ? Gender::Female->value : Gender::Male->value)
+            ->whereNotIn('id', $context['rejected']['spouse'])
             ->whereNull('spouse_id')
-            ->whereDate('birthdate', '<=', now()->subYears(16))
+            ->where('birthdate', '<=', now()->subYears(16)->toDateString())
+            ->where('birthdate', '<=', $context['birth']->copy()->addYears(25)->toDateString())
+            ->where('birthdate', '>=', $context['birth']->copy()->subYears(25)->toDateString())
             ->where(function (Builder $query) use ($context, $sameBarangayAndSurname): void {
                 $query->whereRaw('1 = 0');
 
@@ -329,8 +361,9 @@ class FindFamilyMatches
                 if ($sameBarangayAndSurname) {
                     $query->orWhere(fn (Builder $inner) => $inner->where('last_name_key', $context['last'])->where('barangay_id', $context['barangay_id']));
                 }
-            })
-            ->get();
+            });
+
+        $candidates = $this->prioritise($candidates, $context)->limit(self::POOL)->get();
 
         return $this->rank($candidates, function (Resident $candidate) use ($context, $parentIds): ?array {
             $difference = abs($this->yearsOlder($candidate, $context['birth']));
@@ -350,7 +383,7 @@ class FindFamilyMatches
             $this->add($score, $reasons, 10, 'Same barangay', $this->sameBarangay($candidate, $context));
 
             return [$score, $reasons];
-        });
+        }, $context['limit']);
     }
 
     /**
@@ -366,7 +399,8 @@ class FindFamilyMatches
 
         $candidates = $this->base($context)
             ->whereNull($slot)
-            ->whereDate('birthdate', '>=', $context['birth']->copy()->addYears(15))
+            ->whereNotIn('id', $context['rejected']['children'])
+            ->where('birthdate', '>=', $context['birth']->copy()->addYears(15)->toDateString())
             ->where(function (Builder $query) use ($context, $isFather): void {
                 $query->whereRaw('1 = 0');
 
@@ -383,8 +417,9 @@ class FindFamilyMatches
                 if ($context['household_id'] !== null) {
                     $query->orWhere('household_id', $context['household_id']);
                 }
-            })
-            ->get();
+            });
+
+        $candidates = $this->prioritise($candidates, $context)->limit(self::POOL)->get();
 
         return $this->rank($candidates, function (Resident $candidate) use ($context, $isFather): array {
             $gap = -$this->yearsOlder($candidate, $context['birth']);
@@ -408,7 +443,7 @@ class FindFamilyMatches
             $this->add($score, $reasons, 10, 'Same barangay', $this->sameBarangay($candidate, $context));
 
             return [$score, $reasons];
-        }, 5);
+        }, $context['limit']);
     }
 
     /**

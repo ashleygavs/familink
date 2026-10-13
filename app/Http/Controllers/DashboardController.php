@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Enums\ResidentStatus;
-use App\Enums\RoleName;
 use App\Models\Household;
 use App\Models\ReliefLog;
 use App\Models\Resident;
@@ -16,22 +15,22 @@ class DashboardController extends Controller
     /**
      * Show the dashboard with summary counts.
      *
-     * Encoders only see the figures of their own barangay.
+     * Everyone only sees the figures of the barangays they may work with.
      */
     public function __invoke(Request $request): Response
     {
         $user = $request->user();
-        $barangayId = $user->hasRole(RoleName::User) ? $user->barangay_id : null;
+        $barangayIds = $user->accessibleBarangayIds();
 
-        $residents = Resident::query()->when($barangayId, fn ($query) => $query->where('barangay_id', $barangayId));
+        $residents = Resident::query()->visibleTo($user);
 
         return Inertia::render('dashboard', [
             'stats' => [
                 'approvedResidents' => (clone $residents)->where('status', ResidentStatus::Approved)->count(),
                 'pendingResidents' => (clone $residents)->where('status', ResidentStatus::Pending)->count(),
-                'households' => Household::query()->when($barangayId, fn ($query) => $query->where('barangay_id', $barangayId))->count(),
+                'households' => Household::query()->when($barangayIds !== null, fn ($query) => $query->whereIn('barangay_id', $barangayIds))->count(),
                 'reliefClaims' => ReliefLog::query()
-                    ->when($barangayId, fn ($query) => $query->whereHas('resident', fn ($resident) => $resident->where('barangay_id', $barangayId)))
+                    ->whereHas('resident', fn ($resident) => $resident->visibleTo($user))
                     ->count(),
             ],
         ]);

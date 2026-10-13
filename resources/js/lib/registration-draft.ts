@@ -5,7 +5,7 @@ import type { RegistrationDraft, RelativeDraft } from '@/types';
  * but is wiped when the tab is closed or the user logs out, which keeps
  * personal details off shared barangay computers.
  */
-const DRAFT_VERSION = 6;
+const DRAFT_VERSION = 8;
 const STORAGE_PREFIX = 'familink.registration.draft.';
 
 export const STEP_PATH = 0;
@@ -68,6 +68,9 @@ export function emptyDraft(lockedBarangayId: number | null): RegistrationDraft {
             nephew_niece: [],
             cousin: [],
         },
+        rejected: {},
+        answers: [],
+        unsure: {},
         linkLater: false,
         relatives: {
             father: null,

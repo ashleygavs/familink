@@ -12,9 +12,10 @@ import { ParentSelector } from '@/components/parent-selector';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { pickVisible } from '@/lib/suggestions';
 import type { FamilyMatch, RegistrationDraft, ResidentOption } from '@/types';
 import { BloodRelatives } from './blood-relatives';
-import { MatchCard } from './match-card';
+import { SuggestionList } from './suggestion-list';
 import type { StepProps, SuggestionState } from './step-types';
 import { ViaRelative } from './via-relative';
 
@@ -25,12 +26,6 @@ type Props = StepProps & {
 };
 
 type Slot = 'father' | 'mother' | 'spouse';
-
-const SLOT_LABEL: Record<Slot, string> = {
-    father: 'father',
-    mother: 'mother',
-    spouse: 'spouse',
-};
 
 export function StepFamilyExisting({
     draft,
@@ -84,21 +79,26 @@ export function StepFamilyExisting({
             spouseMatches.length +
             childMatches.length >
         0;
+    const answeredAny =
+        Object.values(draft.rejected).some((ids) => ids.length > 0) ||
+        Object.values(draft.unsure).some((ids) => ids.length > 0);
 
     const strongPicks: { slot: Slot | 'child'; match: FamilyMatch }[] = [
-        ...[
-            ['father', fatherMatches],
-            ['mother', motherMatches],
-            ['spouse', spouseMatches],
-        ].flatMap(([slot, matches]) => {
-            const best = (matches as FamilyMatch[]).find(
+        ...(
+            [
+                ['father', fatherMatches],
+                ['mother', motherMatches],
+                ['spouse', spouseMatches],
+            ] as const
+        ).flatMap(([slot, matches]) => {
+            const best = pickVisible(draft, slot, matches).visible.find(
                 (m) => m.confidence === 'high',
             );
 
-            return best ? [{ slot: slot as Slot, match: best }] : [];
+            return best ? [{ slot, match: best }] : [];
         }),
-        ...childMatches
-            .filter((match) => match.confidence === 'high')
+        ...pickVisible(draft, 'children', childMatches)
+            .visible.filter((match) => match.confidence === 'high')
             .map((match) => ({ slot: 'child' as const, match })),
     ];
 
@@ -119,23 +119,6 @@ export function StepFamilyExisting({
         });
         clearErrors('family');
     }
-
-    const section = (title: string, slot: Slot, matches: FamilyMatch[]) =>
-        matches.length > 0 && (
-            <div key={slot} className="grid gap-3">
-                <h4 className="text-lg font-bold">Possible {title}</h4>
-                <ul className="grid gap-3">
-                    {matches.map((match) => (
-                        <MatchCard
-                            key={match.resident.id}
-                            match={match}
-                            actionLabel={`Link as my ${SLOT_LABEL[slot]}`}
-                            onLink={() => link(slot, match.resident)}
-                        />
-                    ))}
-                </ul>
-            </div>
-        );
 
     const dependentsReason =
         !person.gender || !person.birthdate || barangayId === null
@@ -189,30 +172,48 @@ export function StepFamilyExisting({
                     !suggestions.failed &&
                     !hasSuggestions && (
                         <p className="rounded-xl border-2 border-slate-200 p-4 text-base dark:border-border">
-                            {knownLinks.length > 0
+                            {knownLinks.length > 0 || answeredAny
                                 ? 'No other likely relatives were found. Search by name below if someone is missing.'
                                 : 'We could not find likely relatives automatically. Search by name below, or start a new family record.'}
                         </p>
                     )}
 
-                {section('fathers', 'father', fatherMatches)}
-                {section('mothers', 'mother', motherMatches)}
-                {section('spouses', 'spouse', spouseMatches)}
-                {childMatches.length > 0 && (
-                    <div className="grid gap-3">
-                        <h4 className="text-lg font-bold">Possible children</h4>
-                        <ul className="grid gap-3">
-                            {childMatches.map((match) => (
-                                <MatchCard
-                                    key={match.resident.id}
-                                    match={match}
-                                    actionLabel="Link as my child"
-                                    onLink={() => addChild(match.resident)}
-                                />
-                            ))}
-                        </ul>
-                    </div>
-                )}
+                <SuggestionList
+                    slot="father"
+                    title="Possible fathers"
+                    matches={fatherMatches}
+                    draft={draft}
+                    update={update}
+                    actionLabel={() => 'Yes, my father'}
+                    onLink={(match) => link('father', match.resident)}
+                />
+                <SuggestionList
+                    slot="mother"
+                    title="Possible mothers"
+                    matches={motherMatches}
+                    draft={draft}
+                    update={update}
+                    actionLabel={() => 'Yes, my mother'}
+                    onLink={(match) => link('mother', match.resident)}
+                />
+                <SuggestionList
+                    slot="spouse"
+                    title="Possible spouses"
+                    matches={spouseMatches}
+                    draft={draft}
+                    update={update}
+                    actionLabel={() => 'Yes, my spouse'}
+                    onLink={(match) => link('spouse', match.resident)}
+                />
+                <SuggestionList
+                    slot="children"
+                    title="Possible children"
+                    matches={childMatches}
+                    draft={draft}
+                    update={update}
+                    actionLabel={() => 'Yes, my child'}
+                    onLink={(match) => addChild(match.resident)}
+                />
 
                 {strongPicks.length > 1 && (
                     <Button type="button" size="lg" onClick={linkAllStrong}>

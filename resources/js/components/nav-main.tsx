@@ -23,7 +23,7 @@ export function NavMain({ items }: { items: NavItem[] }) {
                         <SidebarMenuButton
                             asChild
                             size="lg"
-                            className="text-base font-medium [&>svg]:size-5"
+                            className="text-base font-medium group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0 group-data-[collapsible=icon]:[&>span]:hidden [&>svg]:size-5"
                             isActive={isCurrentUrl(item.href)}
                             tooltip={{ children: item.title }}
                         >

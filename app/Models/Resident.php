@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Enums\ResidentStatus;
 use Database\Factories\ResidentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -145,6 +147,26 @@ class Resident extends Model
     public function approvedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by_user_id');
+    }
+
+    /**
+     * Only the residents in barangays the user may work with. A listed resident with no barangay yet
+     * belongs to the barangay of the resident who listed them.
+     *
+     * @param  Builder<Resident>  $query
+     */
+    #[Scope]
+    protected function visibleTo(Builder $query, User $user): void
+    {
+        $ids = $user->accessibleBarangayIds();
+
+        if ($ids === null) {
+            return;
+        }
+
+        $query->where(fn (Builder $scoped) => $scoped
+            ->whereIn('barangay_id', $ids)
+            ->orWhereHas('listedBy', fn (Builder $lister) => $lister->whereIn('barangay_id', $ids)));
     }
 
     /**

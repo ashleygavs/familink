@@ -2,6 +2,7 @@
 
 namespace App\Actions\Residents;
 
+use App\Actions\Residents\Concerns\PrioritisesLocalCandidates;
 use App\Enums\RelativeKind;
 use App\Enums\ResidentStatus;
 use App\Models\Resident;
@@ -20,11 +21,13 @@ use Illuminate\Database\Eloquent\Collection;
  */
 class FindLikelyRelatives
 {
+    use PrioritisesLocalCandidates;
+
     private const HIGH = 70;
 
     private const MEDIUM = 45;
 
-    private const PER_KIND = 3;
+    private const POOL = 300;
 
     /**
      * @param  array<string, mixed>  $context  The matching context built by FindFamilyMatches.
@@ -45,9 +48,24 @@ class FindLikelyRelatives
             $gap = (int) $candidate->birthdate->diffInYears($context['birth'], false);
             $signals = $this->signals($candidate, $keys, $context, $parentIds);
 
+            $isParentSuggestion = in_array($candidate->id, $parentIds, true);
+
             foreach ($this->relationsFor($signals, $gap) as [$relation, $penalty]) {
+                if (in_array($candidate->id, $context['rejected']['relatives'][$relation->value] ?? [], true)) {
+                    continue;
+                }
+
+                // Someone suggested as a parent could just as well be an uncle or aunt, so show them there too.
+                if ($isParentSuggestion && $relation !== RelativeKind::UncleAunt) {
+                    continue;
+                }
+
                 [$score, $reasons] = $this->score($candidate, $relation, $gap, $signals);
                 $score -= $penalty;
+
+                if ($isParentSuggestion) {
+                    $reasons[] = 'Also suggested as a parent above';
+                }
 
                 if ($score >= self::MEDIUM) {
                     $matches[] = [
@@ -64,11 +82,12 @@ class FindLikelyRelatives
         usort($matches, fn (array $a, array $b) => $b['score'] <=> $a['score']);
 
         $perKind = [];
+        $limit = $context['limit'] ?? 3;
 
-        return array_values(array_filter($matches, function (array $match) use (&$perKind): bool {
+        return array_values(array_filter($matches, function (array $match) use (&$perKind, $limit): bool {
             $perKind[$match['relation']] = ($perKind[$match['relation']] ?? 0) + 1;
 
-            return $perKind[$match['relation']] <= self::PER_KIND;
+            return $perKind[$match['relation']] <= $limit;
         }));
     }
 
@@ -82,10 +101,9 @@ class FindLikelyRelatives
     {
         $names = array_values(array_unique(array_filter([$keys['paternal'], $keys['middle']])));
 
-        return Resident::query()
+        $query = Resident::query()
             ->with(['barangay', 'household', 'father', 'mother'])
             ->whereNot('status', ResidentStatus::Archived->value)
-            ->whereNotIn('id', $parentIds)
             ->when($context['subject'], fn (Builder $query, Resident $subject) => $query->whereKeyNot($subject->id))
             ->when($context['scope'], fn (Builder $query, int $barangayId) => $query->where(
                 fn (Builder $scoped) => $scoped
@@ -105,9 +123,9 @@ class FindLikelyRelatives
                 if ($context['household_id'] !== null) {
                     $query->orWhere('household_id', $context['household_id']);
                 }
-            })
-            ->limit(80)
-            ->get();
+            });
+
+        return $this->prioritise($query, $context)->limit(self::POOL)->get();
     }
 
     /**

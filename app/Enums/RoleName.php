@@ -10,6 +10,14 @@ enum RoleName: string
     case User = 'user';
 
     /**
+     * @return list<string>
+     */
+    public static function values(): array
+    {
+        return array_column(self::cases(), 'value');
+    }
+
+    /**
      * The path a user with this role lands on after logging in.
      */
     public function homePath(): string

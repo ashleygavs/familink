@@ -6,6 +6,7 @@ import {
     ChevronRight,
     Clock,
     Home,
+    Unlink,
 } from 'lucide-react';
 import { useState } from 'react';
 import ApprovalController from '@/actions/App/Http/Controllers/ApprovalController';
@@ -23,6 +24,13 @@ import { formatDate } from '@/lib/format';
 import { approvals } from '@/routes/admin';
 import type { Paginated, PendingResident } from '@/types';
 
+type Unlinking = {
+    resident: PendingResident;
+    kind: 'father' | 'mother' | 'spouse' | 'child' | 'relative';
+    id?: number;
+    name: string;
+};
+
 function Detail({
     label,
     children,
@@ -38,6 +46,30 @@ function Detail({
     );
 }
 
+function LinkedPerson({
+    name,
+    onUnlink,
+}: {
+    name: string;
+    onUnlink: () => void;
+}) {
+    return (
+        <span className="flex flex-wrap items-center gap-2">
+            {name}
+            <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 text-red-700 hover:bg-red-50 hover:text-red-800"
+                onClick={onUnlink}
+            >
+                <Unlink />
+                Unlink
+            </Button>
+        </span>
+    );
+}
+
 export default function Approvals({
     pending,
 }: {
@@ -45,6 +77,7 @@ export default function Approvals({
 }) {
     const [archiving, setArchiving] = useState<PendingResident | null>(null);
     const [busyId, setBusyId] = useState<number | null>(null);
+    const [unlinking, setUnlinking] = useState<Unlinking | null>(null);
 
     function decide(url: string, resident: PendingResident) {
         setBusyId(resident.id);
@@ -56,6 +89,21 @@ export default function Approvals({
                 onFinish: () => {
                     setBusyId(null);
                     setArchiving(null);
+                },
+            },
+        );
+    }
+
+    function unlink(target: Unlinking) {
+        setBusyId(target.resident.id);
+        router.post(
+            ApprovalController.unlink.url(target.resident.id),
+            { kind: target.kind, id: target.id },
+            {
+                preserveScroll: true,
+                onFinish: () => {
+                    setBusyId(null);
+                    setUnlinking(null);
                 },
             },
         );
@@ -122,25 +170,96 @@ export default function Approvals({
                                             </span>
                                         </Detail>
                                         <Detail label="Father">
-                                            {resident.father_name ??
-                                                'Not linked'}
+                                            {resident.father_name ? (
+                                                <LinkedPerson
+                                                    name={resident.father_name}
+                                                    onUnlink={() =>
+                                                        setUnlinking({
+                                                            resident,
+                                                            kind: 'father',
+                                                            name:
+                                                                resident.father_name ??
+                                                                '',
+                                                        })
+                                                    }
+                                                />
+                                            ) : (
+                                                'Not linked'
+                                            )}
                                         </Detail>
                                         <Detail label="Mother">
-                                            {resident.mother_name ??
-                                                'Not linked'}
+                                            {resident.mother_name ? (
+                                                <LinkedPerson
+                                                    name={resident.mother_name}
+                                                    onUnlink={() =>
+                                                        setUnlinking({
+                                                            resident,
+                                                            kind: 'mother',
+                                                            name:
+                                                                resident.mother_name ??
+                                                                '',
+                                                        })
+                                                    }
+                                                />
+                                            ) : (
+                                                'Not linked'
+                                            )}
                                         </Detail>
+                                        {resident.spouse_name && (
+                                            <Detail label="Spouse">
+                                                <LinkedPerson
+                                                    name={resident.spouse_name}
+                                                    onUnlink={() =>
+                                                        setUnlinking({
+                                                            resident,
+                                                            kind: 'spouse',
+                                                            name:
+                                                                resident.spouse_name ??
+                                                                '',
+                                                        })
+                                                    }
+                                                />
+                                            </Detail>
+                                        )}
+                                        {resident.children.length > 0 && (
+                                            <Detail label="Children">
+                                                {resident.children.map(
+                                                    (child) => (
+                                                        <LinkedPerson
+                                                            key={child.id}
+                                                            name={
+                                                                child.full_name
+                                                            }
+                                                            onUnlink={() =>
+                                                                setUnlinking({
+                                                                    resident,
+                                                                    kind: 'child',
+                                                                    id: child.id,
+                                                                    name: child.full_name,
+                                                                })
+                                                            }
+                                                        />
+                                                    ),
+                                                )}
+                                            </Detail>
+                                        )}
                                         {resident.declared_relatives.length >
                                             0 && (
                                             <Detail label="Relatives named">
                                                 {resident.declared_relatives.map(
                                                     (relative) => (
-                                                        <span
-                                                            key={`${relative.relation}-${relative.system_id_no}`}
-                                                            className="block"
-                                                        >
-                                                            {relative.relation}:{' '}
-                                                            {relative.name}
-                                                        </span>
+                                                        <LinkedPerson
+                                                            key={relative.id}
+                                                            name={`${relative.relation}: ${relative.name}`}
+                                                            onUnlink={() =>
+                                                                setUnlinking({
+                                                                    resident,
+                                                                    kind: 'relative',
+                                                                    id: relative.id,
+                                                                    name: relative.name,
+                                                                })
+                                                            }
+                                                        />
                                                     ),
                                                 )}
                                             </Detail>
@@ -213,6 +332,40 @@ export default function Approvals({
                     </>
                 )}
             </div>
+
+            <Dialog
+                open={unlinking !== null}
+                onOpenChange={(open) => !open && setUnlinking(null)}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl">
+                            Remove this family link?
+                        </DialogTitle>
+                        <DialogDescription className="text-base">
+                            {unlinking?.name} will no longer be linked to{' '}
+                            {unlinking?.resident.full_name}. Neither person is
+                            deleted, and you can link them again later.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setUnlinking(null)}
+                        >
+                            Keep link
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            disabled={busyId !== null}
+                            onClick={() => unlinking && unlink(unlinking)}
+                        >
+                            <Unlink />
+                            Yes, unlink
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Dialog
                 open={archiving !== null}

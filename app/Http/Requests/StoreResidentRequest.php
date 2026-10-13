@@ -9,6 +9,7 @@ use App\Enums\HouseholdRole;
 use App\Enums\RelativeKind;
 use App\Enums\ResidentStatus;
 use App\Http\Requests\Concerns\ValidatesFamilyLinks;
+use App\Http\Requests\Concerns\ValidatesSuggestionFeedback;
 use App\Models\Household;
 use App\Models\Resident;
 use Carbon\CarbonInterface;
@@ -21,6 +22,7 @@ use Illuminate\Validation\Validator;
 class StoreResidentRequest extends FormRequest
 {
     use ValidatesFamilyLinks;
+    use ValidatesSuggestionFeedback;
 
     public function authorize(): bool
     {
@@ -87,6 +89,7 @@ class StoreResidentRequest extends FormRequest
             ],
             'consent' => ['boolean'],
             ...$this->familyLinkRules($barangayId),
+            ...$this->suggestionFeedbackRules(),
             'via_relatives' => ['nullable', 'array'],
             'via_relatives.*' => ['array', 'max:10'],
             'via_relatives.*.*' => ['integer', Rule::exists('residents', 'id')->whereNot('status', ResidentStatus::Archived->value)],

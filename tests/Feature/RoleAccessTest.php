@@ -10,7 +10,8 @@ dataset('role_routes', [
     'admin approvals' => [RoleName::Admin, '/admin/approvals'],
     'admin events' => [RoleName::Admin, '/admin/events'],
     'stakeholder analytics' => [RoleName::Stakeholder, '/reports/analytics'],
-    'super admin users' => [RoleName::SuperAdmin, '/admin/users'],
+    'admin users' => [RoleName::Admin, '/admin/users'],
+    'super admin municipalities' => [RoleName::SuperAdmin, '/admin/municipalities'],
 ]);
 
 it('lets the matching role open its pages', function (RoleName $role, string $path) {

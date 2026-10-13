@@ -1,14 +1,22 @@
 import {
     BarChart3,
+    Building2,
     CheckCircle2,
     LayoutDashboard,
+    Lightbulb,
     PackageCheck,
     QrCode,
     UserPlus,
     Users,
 } from 'lucide-react';
 import { dashboard } from '@/routes';
-import { approvals, events, users } from '@/routes/admin';
+import {
+    approvals,
+    events,
+    municipalities,
+    suggestionReport,
+    users,
+} from '@/routes/admin';
 import { register, scanner } from '@/routes/encoder';
 import { analytics } from '@/routes/reports';
 import type { NavItem, RoleName } from '@/types';
@@ -71,6 +79,13 @@ const roleNavItems: RoleNavItem[] = [
         roles: ['admin'],
     },
     {
+        title: 'Suggestion Report',
+        href: suggestionReport(),
+        icon: Lightbulb,
+        description: 'See how often suggested relatives are confirmed.',
+        roles: ['admin'],
+    },
+    {
         title: 'Analytics',
         href: analytics(),
         icon: BarChart3,
@@ -81,7 +96,14 @@ const roleNavItems: RoleNavItem[] = [
         title: 'Users',
         href: users(),
         icon: Users,
-        description: 'Manage staff accounts and their roles.',
+        description: 'Create encoders and assign them to barangays.',
+        roles: ['admin'],
+    },
+    {
+        title: 'Municipalities',
+        href: municipalities(),
+        icon: Building2,
+        description: 'Manage municipalities and their barangays.',
         roles: ['super_admin'],
     },
 ];

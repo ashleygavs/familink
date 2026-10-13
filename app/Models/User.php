@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
@@ -24,6 +25,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string $password
  * @property int|null $role_id
  * @property int|null $barangay_id
+ * @property int|null $municipality_id
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
@@ -52,6 +54,52 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     public function barangay(): BelongsTo
     {
         return $this->belongsTo(Barangay::class);
+    }
+
+    /**
+     * The municipality an admin is assigned to.
+     *
+     * @return BelongsTo<Municipality, $this>
+     */
+    public function municipality(): BelongsTo
+    {
+        return $this->belongsTo(Municipality::class);
+    }
+
+    /**
+     * The barangays an admin handles, always inside their municipality.
+     *
+     * @return BelongsToMany<Barangay, $this>
+     */
+    public function managedBarangays(): BelongsToMany
+    {
+        return $this->belongsToMany(Barangay::class, 'admin_barangay')->withTimestamps();
+    }
+
+    /**
+     * The barangays this user may work with: null means every barangay (super admin and stakeholder),
+     * an admin gets the barangays they handle, an encoder gets their own barangay.
+     *
+     * @return list<int>|null
+     */
+    public function accessibleBarangayIds(): ?array
+    {
+        if ($this->hasRole(RoleName::SuperAdmin, RoleName::Stakeholder)) {
+            return null;
+        }
+
+        if ($this->hasRole(RoleName::Admin)) {
+            return array_values($this->managedBarangays()->pluck('barangays.id')->map(fn ($id): int => (int) $id)->all());
+        }
+
+        return $this->barangay_id === null ? [] : [$this->barangay_id];
+    }
+
+    public function canAccessBarangay(?int $barangayId): bool
+    {
+        $ids = $this->accessibleBarangayIds();
+
+        return $ids === null || ($barangayId !== null && in_array($barangayId, $ids, true));
     }
 
     public function hasRole(RoleName|string ...$roles): bool

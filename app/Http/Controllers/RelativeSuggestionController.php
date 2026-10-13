@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Residents\FindParentsThroughRelative;
+use App\Actions\Residents\FindRelativesThroughRelatives;
 use App\Enums\RelativeKind;
 use App\Enums\ResidentStatus;
 use App\Http\Resources\FamilySuggestionsResource;
@@ -16,7 +17,7 @@ class RelativeSuggestionController extends Controller
      * Suggest a person's parents from the relatives they already know are registered
      * (a brother or sister, grandparent, uncle or aunt, cousin).
      */
-    public function __invoke(Request $request, FindParentsThroughRelative $findParents): FamilySuggestionsResource
+    public function __invoke(Request $request, FindParentsThroughRelative $findParents, FindRelativesThroughRelatives $findRelatives): FamilySuggestionsResource
     {
         $input = $request->validate([
             'relatives' => ['required', 'array', 'min:1', 'max:30'],
@@ -32,6 +33,7 @@ class RelativeSuggestionController extends Controller
         ], array_values($input['relatives']));
 
         $parents = $findParents->handleMany($pairs);
+        $derived = $findRelatives->handle($pairs);
 
         return FamilySuggestionsResource::make([
             'claims' => [],
@@ -39,7 +41,7 @@ class RelativeSuggestionController extends Controller
             'mother' => $parents['mother'],
             'spouse' => [],
             'children' => [],
-            'relatives' => [],
+            'relatives' => $derived,
         ]);
     }
 }
