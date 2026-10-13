@@ -114,3 +114,28 @@ it('keeps the links endpoint away from encoders', function () {
 
     expect($resident->fresh()->status)->toBe(ResidentStatus::Pending);
 });
+
+it('only suggests people from the barangays an admin handles', function () {
+    $admin = User::factory()->withRole(RoleName::Admin)->create();
+    $make = fn (string $first, string $birthdate, ?Household $household = null) => Resident::factory()->create([
+        'household_id' => ($household ?? $this->household)->id, 'first_name' => $first, 'last_name' => 'Dela Cruz', 'gender' => 'Male', 'birthdate' => $birthdate,
+    ]);
+    $inside = $make('Juan', '1980-03-14');
+    $outside = $make('Karl', '1979-03-14', Household::factory()->create(['barangay_id' => Barangay::factory()]));
+    Resident::factory()->pending()->create([
+        'household_id' => $this->household->id, 'first_name' => 'Pedro', 'last_name' => 'Dela Cruz', 'gender' => 'Male', 'birthdate' => '2008-05-01',
+    ]);
+
+    $fathers = function (User $user): array {
+        $ids = [];
+
+        test()->actingAs($user)->get(route('admin.approvals'))->assertOk()->assertInertia(function ($page) use (&$ids): void {
+            $ids = collect($page->toArray()['props']['pending']['data'][0]['suggestions']['father'])->pluck('resident.id')->all();
+        });
+
+        return $ids;
+    };
+
+    expect($fathers($admin))->toBe([$inside->id])
+        ->and($fathers(User::factory()->withRole(RoleName::SuperAdmin)->create()))->toContain($inside->id, $outside->id);
+});

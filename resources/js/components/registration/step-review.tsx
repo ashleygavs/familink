@@ -49,9 +49,13 @@ function Section({
 }
 
 function describeRelative(relative: RelativeDraft): string {
-    const name = [relative.first_name, relative.middle_name, relative.last_name]
+    const name = [
+        ...[relative.first_name, relative.middle_name, relative.last_name]
+            .filter(Boolean)
+            .map(properCase),
+        relative.suffix,
+    ]
         .filter(Boolean)
-        .map(properCase)
         .join(' ');
     const born = relative.birthdate
         ? `born ${formatDate(relative.birthdate)}`
@@ -75,11 +79,16 @@ export function StepReview({
     const { person, household, relatives } = draft;
     const listed = hasListedRelatives(draft);
     const relativesInRecords = useBloodRelatives(bloodRelativesUrl(draft));
-    const fullName = [person.first_name, person.middle_name, person.last_name]
+    const fullName = [
+        ...[person.first_name, person.middle_name, person.last_name]
+            .filter(Boolean)
+            .map(properCase),
+        person.suffix,
+    ]
         .filter(Boolean)
-        .map(properCase)
         .join(' ');
 
+    // The claimed record and the chosen links can name the same person, so each line is shown once.
     const linked = [
         draft.claim?.father_name && `Father: ${draft.claim.father_name}`,
         draft.claim?.mother_name && `Mother: ${draft.claim.mother_name}`,
@@ -89,7 +98,11 @@ export function StepReview({
         draft.mother && `Mother: ${draft.mother.full_name}`,
         draft.spouse && `Spouse: ${draft.spouse.full_name}`,
         ...draft.dependents.map((child) => `Child: ${child.full_name}`),
-    ].filter(Boolean) as string[];
+    ]
+        .filter(Boolean)
+        .filter(
+            (line, index, lines) => lines.indexOf(line) === index,
+        ) as string[];
 
     const relativeLines = relativesInRecords.data
         ? Object.values(relativesInRecords.data)

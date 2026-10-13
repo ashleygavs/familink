@@ -105,10 +105,10 @@ class FindLikelyRelatives
             ->with(['barangay', 'household', 'father', 'mother'])
             ->whereNot('status', ResidentStatus::Archived->value)
             ->when($context['subject'], fn (Builder $query, Resident $subject) => $query->whereKeyNot($subject->id))
-            ->when($context['scope'], fn (Builder $query, int $barangayId) => $query->where(
+            ->when($context['scope'] !== null, fn (Builder $query) => $query->where(
                 fn (Builder $scoped) => $scoped
-                    ->where('barangay_id', $barangayId)
-                    ->orWhereHas('listedBy', fn (Builder $lister) => $lister->where('barangay_id', $barangayId)),
+                    ->whereIn('barangay_id', $context['scope'])
+                    ->orWhereHas('listedBy', fn (Builder $lister) => $lister->whereIn('barangay_id', $context['scope'])),
             ))
             ->where(function (Builder $query) use ($context, $names): void {
                 $query->whereRaw('1 = 0');

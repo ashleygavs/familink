@@ -51,7 +51,7 @@ class ApprovalController extends Controller
                     ->values()->all(),
                 'registered_at' => $resident->created_at?->toIso8601String(),
                 'declared_relatives' => $this->declaredRelatives($resident),
-                'suggestions' => $this->suggestionsFor($findFamilyMatches, $feedback, $resident),
+                'suggestions' => $this->suggestionsFor($findFamilyMatches, $feedback, $resident, $request->user()->accessibleBarangayIds()),
             ]);
 
         return Inertia::render('admin/approvals', ['pending' => $pending]);
@@ -136,11 +136,13 @@ class ApprovalController extends Controller
     }
 
     /**
-     * Suggestions for the family slots that are still empty.
+     * Suggestions for the family slots that are still empty. Only people in the barangays the admin handles
+     * are suggested, so an admin never sees residents outside their area.
      *
+     * @param  list<int>|null  $scope  The admin's barangays; null for a super admin, who sees everyone.
      * @return array<string, mixed>
      */
-    private function suggestionsFor(FindFamilyMatches $findFamilyMatches, RecordSuggestionFeedback $feedback, Resident $resident): array
+    private function suggestionsFor(FindFamilyMatches $findFamilyMatches, RecordSuggestionFeedback $feedback, Resident $resident, ?array $scope): array
     {
         $answered = $feedback->rejectedFor($resident);
 
@@ -154,7 +156,7 @@ class ApprovalController extends Controller
             'civil_status' => $resident->civil_status,
             'household_id' => $resident->household_id,
             'barangay_id' => $resident->barangay_id,
-        ], null, $resident, [
+        ], $scope, $resident, [
             'rejected' => [
                 'father' => $answered['father'] ?? [],
                 'mother' => $answered['mother'] ?? [],

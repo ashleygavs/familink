@@ -6,6 +6,7 @@ use App\Actions\Residents\FindFamilyMatches;
 use App\Enums\CivilStatus;
 use App\Enums\Gender;
 use App\Enums\HouseholdRole;
+use App\Enums\NameSuffix;
 use App\Enums\RelativeKind;
 use App\Enums\ResidentStatus;
 use App\Http\Requests\Concerns\ValidatesFamilyLinks;
@@ -69,6 +70,7 @@ class StoreResidentRequest extends FormRequest
             'first_name' => ['required', 'string', 'max:100'],
             'middle_name' => ['nullable', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
+            'suffix' => ['nullable', Rule::enum(NameSuffix::class)],
             'maiden_name' => ['nullable', 'string', 'max:100'],
             'birthdate' => ['required', 'date', 'before_or_equal:today', 'after:1899-12-31'],
             'gender' => ['required', Rule::enum(Gender::class)],
@@ -181,6 +183,7 @@ class StoreResidentRequest extends FormRequest
             "{$prefix}.first_name" => [$present, 'string', 'max:100'],
             "{$prefix}.middle_name" => ['nullable', 'string', 'max:100'],
             "{$prefix}.last_name" => [$present, 'string', 'max:100'],
+            "{$prefix}.suffix" => ['nullable', Rule::enum(NameSuffix::class)],
             "{$prefix}.birthdate" => ['nullable', 'date', 'before_or_equal:today', 'after:1899-12-31'],
             "{$prefix}.approximate_age" => ['nullable', 'integer', 'between:0,120'],
             "{$prefix}.is_deceased" => ['boolean'],

@@ -93,6 +93,7 @@ class ResidentController extends Controller
                 ->where('first_name', 'like', $like)
                 ->orWhere('middle_name', 'like', $like)
                 ->orWhere('last_name', 'like', $like)
+                ->orWhere('suffix', 'like', $like)
                 ->orWhere('system_id_no', 'like', $like));
         }
 

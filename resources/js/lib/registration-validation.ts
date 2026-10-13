@@ -177,6 +177,7 @@ export function stepForErrorKey(key: string): number {
             'middle_name',
             'maiden_name',
             'last_name',
+            'suffix',
             'birthdate',
             'gender',
             'civil_status',
@@ -208,6 +209,7 @@ function relativePayload(
         first_name: relative.first_name,
         middle_name: relative.middle_name || null,
         last_name: relative.last_name,
+        suffix: relative.suffix || null,
         gender: relative.gender || null,
         birthdate: relative.birthdate || null,
         approximate_age:
@@ -235,6 +237,7 @@ export function buildPayload(
         middle_name: person.middle_name || null,
         maiden_name: person.maiden_name || null,
         last_name: person.last_name,
+        suffix: person.suffix || null,
         birthdate: person.birthdate,
         gender: person.gender,
         civil_status: person.civil_status,

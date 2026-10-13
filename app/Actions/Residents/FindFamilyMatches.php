@@ -38,14 +38,14 @@ class FindFamilyMatches
 
     /**
      * @param  array{first_name?: string|null, middle_name?: string|null, maiden_name?: string|null, last_name?: string|null, birthdate: string, gender?: string|null, civil_status?: string|null, household_id?: int|null, barangay_id?: int|null}  $person
-     * @param  int|null  $scopeBarangayId  Limit candidates to this barangay (and relatives listed from it).
+     * @param  int|list<int>|null  $scope  Limit candidates to this barangay, or these barangays, and the relatives listed from them. Null means everyone.
      * @param  Resident|null  $subject  The resident being matched, excluded from the results.
      * @param  array{limit?: int, rejected?: array<string, mixed>}  $options  How many matches to return per role (1 to 12, default 3), and the
      *                                                                        residents the person already said "no" to, by role (father, mother,
      *                                                                        spouse, children) and, under "relatives", by relative kind.
      * @return array{claims: list<Claim>, father: list<Match>, mother: list<Match>, spouse: list<Match>, children: list<Match>, relatives: list<Relative>}
      */
-    public function handle(array $person, ?int $scopeBarangayId = null, ?Resident $subject = null, array $options = []): array
+    public function handle(array $person, int|array|null $scope = null, ?Resident $subject = null, array $options = []): array
     {
         $ids = fn (mixed $values): array => array_values(array_unique(array_map('intval', (array) $values)));
         $rejected = (array) ($options['rejected'] ?? []);
@@ -71,7 +71,7 @@ class FindFamilyMatches
             'civil_status' => $civilStatus,
             'household_id' => isset($person['household_id']) ? (int) $person['household_id'] : null,
             'barangay_id' => isset($person['barangay_id']) ? (int) $person['barangay_id'] : null,
-            'scope' => $scopeBarangayId,
+            'scope' => is_int($scope) ? [$scope] : $scope,
             'subject' => $subject,
             'limit' => max(1, min(12, (int) ($options['limit'] ?? self::DEFAULT_LIMIT))),
             'rejected' => [
@@ -456,10 +456,10 @@ class FindFamilyMatches
             ->with(['barangay', 'household', 'listedBy', 'father', 'mother', 'spouse'])
             ->whereNot('status', ResidentStatus::Archived->value)
             ->when($context['subject'], fn (Builder $query, Resident $subject) => $query->whereKeyNot($subject->id))
-            ->when($context['scope'], fn (Builder $query, int $barangayId) => $query->where(
+            ->when($context['scope'] !== null, fn (Builder $query) => $query->where(
                 fn (Builder $scoped) => $scoped
-                    ->where('barangay_id', $barangayId)
-                    ->orWhereHas('listedBy', fn (Builder $lister) => $lister->where('barangay_id', $barangayId)),
+                    ->whereIn('barangay_id', $context['scope'])
+                    ->orWhereHas('listedBy', fn (Builder $lister) => $lister->whereIn('barangay_id', $context['scope'])),
             ));
     }
 

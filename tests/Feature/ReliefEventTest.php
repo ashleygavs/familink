@@ -7,6 +7,7 @@ use App\Models\Municipality;
 use App\Models\ReliefEvent;
 use App\Models\ReliefLog;
 use App\Models\User;
+use Illuminate\Support\Carbon;
 
 beforeEach(function () {
     $this->municipality = Municipality::factory()->create();
@@ -155,4 +156,18 @@ it('lets a super admin change the limit of an active event while an admin cannot
 it('tells the page whether the viewer may set the limit', function () {
     $this->actingAs($this->admin)->get(route('admin.events'))->assertInertia(fn ($page) => $page->where('canSetLimit', false));
     $this->actingAs($this->superAdmin)->get(route('admin.events'))->assertInertia(fn ($page) => $page->where('canSetLimit', true));
+});
+
+it('decides whether an event is open by the Philippine date, not the UTC date', function () {
+    $event = ReliefEvent::factory()->create(['municipality_id' => $this->municipality->id, 'start_date' => '2026-10-14', 'end_date' => '2026-10-14']);
+
+    // 17:30 UTC on Oct 13 is already 1:30 AM on Oct 14 in Manila.
+    Carbon::setTestNow(Carbon::parse('2026-10-13 17:30:00', 'UTC'));
+    expect($event->isOpenForScanning())->toBeTrue();
+
+    // 16:30 UTC on Oct 14 is 12:30 AM on Oct 15 in Manila, so the event has ended.
+    Carbon::setTestNow(Carbon::parse('2026-10-14 16:30:00', 'UTC'));
+    expect($event->isOpenForScanning())->toBeFalse();
+
+    Carbon::setTestNow();
 });

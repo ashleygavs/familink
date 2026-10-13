@@ -34,7 +34,7 @@ class ResidentListController extends Controller
                 $like = '%'.str_replace(['%', '_'], ['\%', '\_'], $search).'%';
 
                 $query->where(fn ($inner) => $inner
-                    ->whereRaw("concat_ws(' ', first_name, middle_name, last_name) like ?", [$like])
+                    ->whereRaw("concat_ws(' ', first_name, middle_name, last_name, suffix) like ?", [$like])
                     ->orWhere('system_id_no', 'like', $like)
                     ->orWhereHas('household', fn ($household) => $household->where('household_code', 'like', $like)));
             })

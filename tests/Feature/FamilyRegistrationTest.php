@@ -3,6 +3,7 @@
 use App\Enums\ResidentStatus;
 use App\Enums\RoleName;
 use App\Models\Barangay;
+use App\Models\Household;
 use App\Models\Resident;
 use App\Models\User;
 
@@ -241,4 +242,58 @@ it('does not let a claim bring in new relatives', function () {
     ]))->assertSessionHasNoErrors();
 
     expect(Resident::query()->count())->toBe($count);
+});
+
+it('saves a suffix for the registrant and for listed relatives, so a father and son with the same name stay apart', function () {
+    $payload = familyPayload([
+        'first_name' => 'juan', 'last_name' => 'dela cruz', 'suffix' => 'Jr.', 'birthdate' => '1980-03-14',
+        'relatives' => [
+            'father' => ['first_name' => 'juan', 'last_name' => 'dela cruz', 'suffix' => 'Sr.', 'birthdate' => '1955-01-01', 'lives_with_me' => false],
+            'children' => [
+                ['first_name' => 'juan', 'last_name' => 'dela cruz', 'suffix' => 'III', 'gender' => 'Male', 'birthdate' => '2008-11-20', 'lives_with_me' => true, 'other_parent_is_spouse' => false],
+            ],
+            'parents_partners' => true,
+        ],
+    ]);
+
+    $this->actingAs($this->encoder)->post(route('encoder.register.store'), $payload)
+        ->assertSessionHasNoErrors()
+        ->assertSessionHas('registered', fn (array $registered) => $registered['full_name'] === 'Juan Dela Cruz Jr.');
+
+    $names = Resident::query()->orderBy('birthdate')->get()->map(fn (Resident $resident) => $resident->full_name)->all();
+    $junior = Resident::query()->where('suffix', 'Jr.')->firstOrFail();
+
+    expect($names)->toBe(['Juan Dela Cruz Sr.', 'Juan Dela Cruz Jr.', 'Juan Dela Cruz III'])
+        ->and($junior->father->suffix)->toBe('Sr.')
+        ->and($junior->childrenAsFather->first()->suffix)->toBe('III');
+});
+
+it('only accepts the known name suffixes and treats an empty one as none', function () {
+    $this->actingAs($this->encoder)->post(route('encoder.register.store'), familyPayload(['suffix' => 'Esq.']))->assertSessionHasErrors('suffix');
+
+    $payload = familyPayload();
+    $payload['relatives']['father']['suffix'] = 'Dr.';
+    $this->actingAs($this->encoder)->post(route('encoder.register.store'), $payload)->assertSessionHasErrors('relatives.father.suffix');
+
+    $this->actingAs($this->encoder)->post(route('encoder.register.store'), familyPayload(['suffix' => '']))->assertSessionHasNoErrors();
+    expect(Resident::query()->where('first_name', 'Juan')->value('suffix'))->toBeNull();
+});
+
+it('finds a resident by searching with the suffix', function () {
+    $senior = Resident::factory()->create(['barangay_id' => $this->barangay->id, 'household_id' => Household::factory()->create(['barangay_id' => $this->barangay->id])->id, 'first_name' => 'Juan', 'middle_name' => null, 'last_name' => 'Dela Cruz', 'suffix' => 'Sr.']);
+    Resident::factory()->create(['barangay_id' => $this->barangay->id, 'household_id' => $senior->household_id, 'first_name' => 'Juan', 'middle_name' => null, 'last_name' => 'Dela Cruz', 'suffix' => 'Jr.']);
+
+    $names = function (string $query) {
+        $found = [];
+        $this->actingAs($this->encoder)->get(route('residents.index', ['q' => $query]))->assertOk()
+            ->assertInertia(function ($page) use (&$found): void {
+                $found = collect($page->toArray()['props']['residents']['data'])->pluck('full_name')->all();
+            });
+
+        return $found;
+    };
+
+    expect($names('Juan Dela Cruz'))->toHaveCount(2)
+        ->and($names('Jr.'))->toBe(['Juan Dela Cruz Jr.'])
+        ->and($names('Dela Cruz Sr.'))->toBe(['Juan Dela Cruz Sr.']);
 });

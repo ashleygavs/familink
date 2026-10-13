@@ -4,6 +4,7 @@ import {
     CheckCircle2,
     ChevronLeft,
     ChevronRight,
+    MapPin,
     Network,
     Search,
 } from 'lucide-react';
@@ -27,6 +28,8 @@ import type { Paginated } from '@/types';
 type EventOption = {
     id: number;
     title: string;
+    municipality_name: string | null;
+    province: string | null;
     status: string;
     allocation_type: string;
     max_claims_per_household: number | null;
@@ -69,6 +72,12 @@ type Props = {
         households_reached: number;
         coverage: number | null;
     };
+    /** Where the chosen event is happening. */
+    location: {
+        municipality: string | null;
+        province: string | null;
+        barangays: string[];
+    } | null;
     barangays: BarangayRow[];
     households: Paginated<HouseholdRow>;
 };
@@ -118,6 +127,7 @@ export default function Analytics({
     filters,
     events,
     totals,
+    location,
     barangays,
     households,
 }: Props) {
@@ -187,7 +197,7 @@ export default function Analytics({
                                 placeholder="Choose an event"
                                 values={events.map((candidate) => ({
                                     value: candidate.id.toString(),
-                                    label: `${candidate.title} (${candidate.status})`,
+                                    label: `${candidate.title} · ${candidate.municipality_name ?? 'No municipality'} (${candidate.status})`,
                                 }))}
                                 onChange={(value) =>
                                     apply({ event: Number(value) })
@@ -200,6 +210,32 @@ export default function Analytics({
                                 {formatDate(event.start_date)} to{' '}
                                 {formatDate(event.end_date)}
                             </p>
+                        )}
+                        {event && location && (
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border-2 border-blue-200 bg-sky-50 p-3 text-base sm:col-span-2 dark:border-sidebar-border dark:bg-sidebar">
+                                <MapPin className="size-5 text-blue-600" />
+                                <span className="font-semibold">
+                                    Happening in {location.municipality}
+                                    {location.province
+                                        ? `, ${location.province}`
+                                        : ''}
+                                </span>
+                                <span className="text-muted-foreground">
+                                    {location.barangays.length}{' '}
+                                    {location.barangays.length === 1
+                                        ? 'barangay'
+                                        : 'barangays'}
+                                    :
+                                </span>
+                                {location.barangays.map((name) => (
+                                    <span
+                                        key={name}
+                                        className="rounded-md bg-blue-600 px-2 py-0.5 text-sm font-bold text-white"
+                                    >
+                                        {name}
+                                    </span>
+                                ))}
+                            </div>
                         )}
                     </div>
                 )}

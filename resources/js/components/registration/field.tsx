@@ -63,5 +63,37 @@ export function ChoiceSelect({
     );
 }
 
+/** The name endings a person can have, in the order they are offered. */
+export const NAME_SUFFIXES = ['Jr.', 'Sr.', 'II', 'III', 'IV', 'V'];
+
+/**
+ * The optional "Jr., Sr., II..." choice that goes after a last name. An empty value means no suffix.
+ */
+export function SuffixSelect({
+    id,
+    value,
+    onChange,
+}: {
+    id: string;
+    value: string;
+    onChange: (value: string) => void;
+}) {
+    return (
+        <ChoiceSelect
+            id={id}
+            value={value === '' ? 'none' : value}
+            placeholder="None"
+            values={[
+                { value: 'none', label: 'None' },
+                ...NAME_SUFFIXES.map((suffix) => ({
+                    value: suffix,
+                    label: suffix,
+                })),
+            ]}
+            onChange={(chosen) => onChange(chosen === 'none' ? '' : chosen)}
+        />
+    );
+}
+
 export const asChoices = (values: string[]) =>
     values.map((value) => ({ value, label: value }));

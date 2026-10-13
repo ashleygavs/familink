@@ -3,7 +3,7 @@ import { ResidentSummary } from '@/components/parent-selector';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { ClaimedResident, HouseholdOption, PersonDraft } from '@/types';
-import { asChoices, ChoiceSelect, Field } from './field';
+import { asChoices, ChoiceSelect, Field, SuffixSelect } from './field';
 import type { StepProps, SuggestionState } from './step-types';
 
 type Props = StepProps & {
@@ -105,6 +105,17 @@ export function StepPerson({
                         onChange={(e) => set({ last_name: e.target.value })}
                         placeholder="e.g. Dela Cruz"
                         autoComplete="off"
+                    />
+                </Field>
+                <Field
+                    id="suffix"
+                    label="Suffix (optional)"
+                    error={errors.suffix}
+                >
+                    <SuffixSelect
+                        id="suffix"
+                        value={person.suffix}
+                        onChange={(suffix) => set({ suffix })}
                     />
                 </Field>
                 <Field

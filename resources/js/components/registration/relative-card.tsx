@@ -4,7 +4,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { Gender, RelativeDraft } from '@/types';
-import { ChoiceSelect, Field } from './field';
+import { ChoiceSelect, Field, SuffixSelect } from './field';
 import type { StepErrors } from './step-types';
 
 type Props = {
@@ -89,6 +89,17 @@ export function RelativeCard({
                             onChange({ last_name: e.target.value })
                         }
                         autoComplete="off"
+                    />
+                </Field>
+                <Field
+                    id={`${id}-suffix`}
+                    label="Suffix (optional)"
+                    error={error('suffix')}
+                >
+                    <SuffixSelect
+                        id={`${id}-suffix`}
+                        value={relative.suffix}
+                        onChange={(suffix) => onChange({ suffix })}
                     />
                 </Field>
                 {askGender && (

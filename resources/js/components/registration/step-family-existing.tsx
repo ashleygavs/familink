@@ -61,9 +61,13 @@ export function StepFamilyExisting({
     const open = (matches: FamilyMatch[] | undefined) =>
         (matches ?? []).filter((match) => !taken(match.resident));
     const data = suggestions.data;
-    const fatherMatches = draft.father ? [] : open(data?.father);
-    const motherMatches = draft.mother ? [] : open(data?.mother);
-    const spouseMatches = draft.spouse ? [] : open(data?.spouse);
+    // A claimed record already has its parents and spouse, so they are not suggested again.
+    const fatherMatches =
+        draft.father || draft.claim?.father_id ? [] : open(data?.father);
+    const motherMatches =
+        draft.mother || draft.claim?.mother_id ? [] : open(data?.mother);
+    const spouseMatches =
+        draft.spouse || draft.claim?.spouse_name ? [] : open(data?.spouse);
     const childMatches = open(data?.children);
     const knownLinks = draft.claim
         ? [

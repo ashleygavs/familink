@@ -142,6 +142,7 @@ class RegisterResident
             'first_name' => $data['first_name'],
             'middle_name' => $data['middle_name'] ?? null,
             'last_name' => $data['last_name'],
+            'suffix' => $data['suffix'] ?? null,
             'maiden_name' => $data['maiden_name'] ?? null,
             'birthdate' => $data['birthdate'],
             'gender' => $data['gender'],

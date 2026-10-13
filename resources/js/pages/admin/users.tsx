@@ -124,12 +124,15 @@ function StaffForm({
     );
 
     function toggleBarangay(id: number, checked: boolean) {
-        setData(
-            'managed_barangay_ids',
-            checked
-                ? [...data.managed_barangay_ids, id]
-                : data.managed_barangay_ids.filter((current) => current !== id),
-        );
+        // Built from the latest value, so two quick ticks both count.
+        setData((current) => ({
+            ...current,
+            managed_barangay_ids: checked
+                ? [...current.managed_barangay_ids, id]
+                : current.managed_barangay_ids.filter(
+                      (barangayId) => barangayId !== id,
+                  ),
+        }));
     }
 
     function submit(event: FormEvent) {
@@ -446,7 +449,11 @@ export default function Users({
                             key={editing?.id ?? 'new'}
                             editing={editing}
                             municipalities={municipalities}
-                            assignableRoles={assignableRoles}
+                            assignableRoles={
+                                editing?.id === auth.user.id && editing.role
+                                    ? [editing.role]
+                                    : assignableRoles
+                            }
                             onClose={() => setFormOpen(false)}
                         />
                     )}

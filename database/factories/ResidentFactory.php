@@ -26,6 +26,7 @@ class ResidentFactory extends Factory
             'first_name' => fake()->firstName(),
             'middle_name' => fake()->lastName(),
             'last_name' => fake()->lastName(),
+            'suffix' => null,
             'birthdate' => fake()->dateTimeBetween('-80 years', '-1 year'),
             'gender' => fake()->randomElement(['Male', 'Female']),
             'civil_status' => 'Single',

@@ -9,6 +9,7 @@ export type RelativeDraft = {
     first_name: string;
     middle_name: string;
     last_name: string;
+    suffix: string;
     gender: '' | Gender;
     birthdate: string;
     approximate_age: string;
@@ -30,6 +31,7 @@ export type PersonDraft = {
     middle_name: string;
     maiden_name: string;
     last_name: string;
+    suffix: string;
     birthdate: string;
     gender: '' | Gender;
     civil_status: string;

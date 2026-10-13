@@ -23,6 +23,7 @@ use Illuminate\Support\Str;
  * @property string $first_name
  * @property string|null $middle_name
  * @property string $last_name
+ * @property string|null $suffix
  * @property string|null $maiden_name
  * @property Carbon $birthdate
  * @property bool $birthdate_estimated
@@ -46,7 +47,7 @@ use Illuminate\Support\Str;
  */
 #[Fillable([
     'system_id_no', 'qr_code_hash', 'household_id', 'barangay_id',
-    'first_name', 'middle_name', 'last_name', 'maiden_name', 'birthdate', 'birthdate_estimated',
+    'first_name', 'middle_name', 'last_name', 'suffix', 'maiden_name', 'birthdate', 'birthdate_estimated',
     'gender', 'civil_status', 'household_role',
     'spouse_id', 'father_id', 'mother_id', 'status', 'is_deceased',
     'approved_by_user_id', 'listed_by_resident_id',
@@ -98,7 +99,7 @@ class Resident extends Model
 
     public function getFullNameAttribute(): string
     {
-        return collect([$this->first_name, $this->middle_name, $this->last_name])->filter()->implode(' ');
+        return collect([$this->first_name, $this->middle_name, $this->last_name, $this->suffix])->filter()->implode(' ');
     }
 
     /**

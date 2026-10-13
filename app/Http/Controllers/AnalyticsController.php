@@ -35,6 +35,7 @@ class AnalyticsController extends Controller
 
         $events = ReliefEvent::query()
             ->visibleTo($user)
+            ->with('municipality')
             ->whereNot('status', EventStatus::Draft->value)
             ->latest('start_date')
             ->latest('id')
@@ -50,9 +51,12 @@ class AnalyticsController extends Controller
             ? $events->firstWhere('id', (int) $input['event'])
             : ($events->first(fn (ReliefEvent $candidate) => $candidate->status === EventStatus::Active) ?? $events->first());
 
+        // An event happens in one municipality, so only its barangays count towards it. Without an event,
+        // everything the viewer may see is shown.
         $barangays = Barangay::query()
             ->with('municipality')
             ->when($scope !== null, fn ($query) => $query->whereIn('id', $scope))
+            ->when($event !== null, fn ($query) => $query->where('municipality_id', $event->municipality_id))
             ->orderBy('name')
             ->get();
 
@@ -66,13 +70,20 @@ class AnalyticsController extends Controller
             'events' => $events->map(fn (ReliefEvent $candidate): array => [
                 'id' => $candidate->id,
                 'title' => $candidate->title,
+                'municipality_name' => $candidate->municipality?->name,
+                'province' => $candidate->municipality?->province,
                 'status' => $candidate->status->value,
                 'allocation_type' => $candidate->allocation_type->value,
                 'max_claims_per_household' => $candidate->max_claims_per_household,
                 'start_date' => $candidate->start_date->toDateString(),
                 'end_date' => $candidate->end_date->toDateString(),
             ])->values(),
-            'totals' => $this->totals($rows, $scope, $event),
+            'location' => $event === null ? null : [
+                'municipality' => $event->municipality?->name,
+                'province' => $event->municipality?->province,
+                'barangays' => $barangays->pluck('name')->values()->all(),
+            ],
+            'totals' => $this->totals($rows, $event),
             'barangays' => $rows->values(),
             'households' => $this->households($barangays, $barangayFilter, $input['q'] ?? '', $event),
         ]);
@@ -162,10 +173,9 @@ class AnalyticsController extends Controller
 
     /**
      * @param  Collection<int, BarangayRow>  $rows
-     * @param  list<int>|null  $scope
      * @return array<string, int|null>
      */
-    private function totals(Collection $rows, ?array $scope, ?ReliefEvent $event): array
+    private function totals(Collection $rows, ?ReliefEvent $event): array
     {
         $eligible = (int) $rows->sum('eligible');
 
@@ -173,7 +183,7 @@ class AnalyticsController extends Controller
             'approved_residents' => (int) $rows->sum('approved_residents'),
             'pending_residents' => Resident::query()
                 ->where('status', ResidentStatus::Pending->value)
-                ->when($scope !== null, fn ($query) => $query->whereIn('barangay_id', $scope))
+                ->whereIn('barangay_id', $rows->pluck('id')->all())
                 ->count(),
             'households' => (int) $rows->sum('households'),
             'eligible' => $eligible,
@@ -208,7 +218,7 @@ class AnalyticsController extends Controller
                     ->where('household_code', 'like', $like)
                     ->orWhere('street_address', 'like', $like)
                     ->orWhereHas('head', fn ($head) => $head
-                        ->whereRaw("concat_ws(' ', first_name, middle_name, last_name) like ?", [$like])));
+                        ->whereRaw("concat_ws(' ', first_name, middle_name, last_name, suffix) like ?", [$like])));
             })
             ->orderBy('household_code')
             ->paginate(15)

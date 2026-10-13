@@ -30,7 +30,8 @@ class HouseholdController extends Controller
                 ->orWhere('street_address', 'like', $like)
                 ->orWhereHas('head', fn ($head) => $head
                     ->where('first_name', 'like', $like)
-                    ->orWhere('last_name', 'like', $like)))
+                    ->orWhere('last_name', 'like', $like)
+                    ->orWhere('suffix', 'like', $like)))
             ->orderBy('household_code')
             ->limit(10)
             ->get();

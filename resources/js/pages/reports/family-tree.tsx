@@ -137,7 +137,7 @@ export default function FamilyTree({ household, tree }: Props) {
                         direction: 'UD',
                         sortMethod: 'directed',
                         levelSeparation: 130,
-                        nodeSpacing: 170,
+                        nodeSpacing: 270,
                     },
                 },
                 physics: false,

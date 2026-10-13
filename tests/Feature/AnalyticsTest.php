@@ -147,3 +147,23 @@ it('counts at most the limit of residents per household as eligible', function (
 
     expect(analyticsFor($this->stakeholder, ['event' => $event->id])['totals'])->toMatchArray(['eligible' => 3, 'claims' => 1, 'coverage' => 33]);
 });
+
+it('only counts the barangays of the municipality where the event happens, and says where that is', function () {
+    $lubao = Municipality::factory()->create(['name' => 'Lubao', 'province' => 'Pampanga']);
+    $santaCruz = Barangay::factory()->create(['municipality_id' => $lubao->id, 'name' => 'Santa Cruz']);
+    ($this->resident)(($this->household)($this->sanJose));
+    ($this->resident)(($this->household)($santaCruz));
+
+    $before = analyticsFor($this->stakeholder);
+    expect($before['location'])->toBeNull()
+        ->and(collect($before['barangays'])->pluck('name')->all())->toContain('San Jose', 'Cabalantian', 'Santa Cruz');
+
+    $event = ReliefEvent::factory()->create(['municipality_id' => $lubao->id]);
+    $props = analyticsFor($this->stakeholder, ['event' => $event->id]);
+
+    expect(collect($props['barangays'])->pluck('name')->all())->toBe(['Santa Cruz'])
+        ->and($props['totals']['approved_residents'])->toBe(1)
+        ->and($props['location'])->toMatchArray(['municipality' => 'Lubao', 'province' => 'Pampanga', 'barangays' => ['Santa Cruz']])
+        ->and(collect($props['events'])->firstWhere('id', $event->id)['municipality_name'])->toBe('Lubao')
+        ->and(collect($props['households']['data'])->pluck('barangay_name')->unique()->all())->toBe(['Santa Cruz']);
+});
