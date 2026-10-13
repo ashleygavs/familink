@@ -21,6 +21,7 @@ class ReliefController extends Controller
     {
         $events = ReliefEvent::query()
             ->visibleTo($request->user())
+            ->with('municipality')
             ->where('status', EventStatus::Active->value)
             ->orderBy('end_date')
             ->get()
@@ -28,6 +29,7 @@ class ReliefController extends Controller
             ->map(fn (ReliefEvent $event): array => [
                 'id' => $event->id,
                 'title' => $event->title,
+                'municipality_name' => $event->municipality?->name,
                 'allocation_type' => $event->allocation_type->value,
                 'max_claims_per_household' => $event->claimLimitPerHousehold(),
                 'end_date' => $event->end_date->toDateString(),

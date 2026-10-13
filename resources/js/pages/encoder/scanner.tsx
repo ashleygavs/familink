@@ -23,6 +23,7 @@ import { scanner as scannerRoute } from '@/routes/encoder';
 type OpenEvent = {
     id: number;
     title: string;
+    municipality_name: string | null;
     allocation_type: string;
     max_claims_per_household: number | null;
     end_date: string;
@@ -209,7 +210,7 @@ export default function QRScanner({ events }: { events: OpenEvent[] }) {
                                     placeholder="Choose an event"
                                     values={events.map((candidate) => ({
                                         value: candidate.id.toString(),
-                                        label: candidate.title,
+                                        label: `${candidate.title} · ${candidate.municipality_name ?? 'No municipality'} · ${candidate.allocation_type}`,
                                     }))}
                                     onChange={setEventId}
                                 />
@@ -220,6 +221,7 @@ export default function QRScanner({ events }: { events: OpenEvent[] }) {
                             <p className="rounded-xl border-2 border-blue-200 bg-sky-50 p-4 text-lg dark:border-sidebar-border dark:bg-sidebar">
                                 <span className="font-bold">{event.title}</span>
                                 {' · '}
+                                {event.municipality_name} ·{' '}
                                 {event.allocation_type}
                                 {event.allocation_type === 'Per Resident' &&
                                     event.max_claims_per_household !== null &&
