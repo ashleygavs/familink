@@ -1,4 +1,4 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ChevronLeft,
     ChevronRight,
@@ -6,9 +6,11 @@ import {
     Home,
     Printer,
     Search,
+    UserCog,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import ResidentManagementController from '@/actions/App/Http/Controllers/ResidentManagementController';
 import { ChoiceSelect, Field } from '@/components/registration/field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,10 +40,14 @@ type Props = {
 const statusChoices = [
     { value: 'Approved', label: 'Approved' },
     { value: 'Pending', label: 'Waiting for approval' },
-    { value: 'all', label: 'Approved and waiting' },
+    { value: 'all', label: 'Everyone registered' },
 ];
 
 export default function Residents({ residents, filters }: Props) {
+    const { auth } = usePage().props;
+    // Only admins can change a resident's marriage or household after approval.
+    const canManage =
+        auth.role_name === 'admin' || auth.role_name === 'super_admin';
     const [search, setSearch] = useState(filters.q);
 
     function apply(next: Partial<Props['filters']>) {
@@ -144,6 +150,18 @@ export default function Residents({ residents, filters }: Props) {
                                     )}
                                 </div>
                                 <div className="flex flex-wrap gap-2">
+                                    {canManage && (
+                                        <Button asChild variant="outline">
+                                            <Link
+                                                href={ResidentManagementController.show.url(
+                                                    resident.id,
+                                                )}
+                                            >
+                                                <UserCog />
+                                                Update
+                                            </Link>
+                                        </Button>
+                                    )}
                                     {resident.status === 'Approved' && (
                                         <Button asChild>
                                             <Link

@@ -171,6 +171,16 @@ class Resident extends Model
     }
 
     /**
+     * Changes an admin made to this resident after approval, such as a marriage or a move.
+     *
+     * @return HasMany<ResidentChange, $this>
+     */
+    public function changes(): HasMany
+    {
+        return $this->hasMany(ResidentChange::class);
+    }
+
+    /**
      * The resident who declared this person as a relative before they registered.
      *
      * @return BelongsTo<Resident, $this>

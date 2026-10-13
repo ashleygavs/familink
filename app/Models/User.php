@@ -153,7 +153,8 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
         return Resident::query()->where('approved_by_user_id', $this->id)->exists()
             || ReliefLog::query()->where('scanned_by_user_id', $this->id)->exists()
             || ReliefEvent::query()->where('created_by_user_id', $this->id)->exists()
-            || SuggestionFeedback::query()->where('decided_by_user_id', $this->id)->exists();
+            || SuggestionFeedback::query()->where('decided_by_user_id', $this->id)->exists()
+            || ResidentChange::query()->where('changed_by_user_id', $this->id)->exists();
     }
 
     public function hasRole(RoleName|string ...$roles): bool

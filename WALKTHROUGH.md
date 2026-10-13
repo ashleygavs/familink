@@ -128,6 +128,17 @@ There are no residents waiting for approval right now. Part A creates some.
 - [ ] **Archive** another and confirm. Expected: they leave the list.
 - [ ] Open that approved person under **Residents**: the QR card button now exists.
 
+**Changes after approval (marriage and household moves)**
+- [ ] Open **Residents** and click **Update** next to Miguel (Cabalantian). The page shows his family, household and an empty history.
+- [ ] **Record a marriage**: search "Ramos", choose Teresa, and let her take his surname. Expected: both Married and linked, Teresa shown as "Teresa Villanueva", and a history line on each.
+- [ ] Try to marry him to his own sister (Sofia): she is not offered in the search. A child under 16 is not offered either.
+- [ ] While a relief event is open (the two Bacolor events are Active), the **Move to another household** button is greyed out and an amber note names the open events. Expected: no move is possible.
+- [ ] Close both Bacolor events (and the one you created), then **Move to another household**: choose "A household already on record", pick `HH-CAB-0002`, relationship Spouse. Expected: he now lives in `HH-CAB-0002`.
+- [ ] Check the earlier relief claims: they still belong to `HH-CAB-0001`.
+- [ ] Recording a marriage is still allowed while an event is open (only household moves are paused).
+- [ ] Move the head of a household (Roberto): you must choose who becomes the new head.
+- [ ] As an encoder, the **Update** button is not shown, and `/admin/residents/27` is forbidden.
+
 **Relief events**
 - [ ] Open **Relief Events**: the four Bacolor events are shown, and no Lubao event.
 - [ ] **New event**: create "Test Aid", Per Resident, start today, end next week, status Draft. Expected: it appears as Draft. You do not see a "Most members per household" box (only a super admin does).
