@@ -1,6 +1,7 @@
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { Lightbulb } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { ChoiceSelect, Field } from '@/components/registration/field';
 import {
     Card,
     CardContent,
@@ -33,6 +34,12 @@ type Props = {
     byConfidence: Row[];
     byReason: Row[];
     reclassified: { from: string; to: string; count: number }[];
+    filters: { range: string; place: string | null };
+    places: {
+        id: number;
+        name: string;
+        barangays: { id: number; name: string }[];
+    }[];
 };
 
 function RateBar({ rate }: { rate: number | null }) {
@@ -158,7 +165,40 @@ export default function SuggestionReport({
     byConfidence,
     byReason,
     reclassified,
+    filters,
+    places,
 }: Props) {
+    function applyFilters(next: Partial<Props['filters']>) {
+        const merged = { ...filters, ...next };
+
+        router.get(
+            suggestionReport().url,
+            {
+                range: merged.range,
+                place: merged.place ?? undefined,
+            },
+            { preserveState: true, preserveScroll: true, replace: true },
+        );
+    }
+
+    const placeChoices = [
+        { value: 'all', label: 'All places' },
+        ...places.flatMap((municipality) => [
+            {
+                value: `m:${municipality.id}`,
+                label: `All of ${municipality.name}`,
+            },
+            ...municipality.barangays.map((barangay) => ({
+                value: `b:${barangay.id}`,
+                label: `  ${municipality.name}: ${barangay.name}`,
+            })),
+        ]),
+    ];
+    const barangayCount = places.reduce(
+        (sum, municipality) => sum + municipality.barangays.length,
+        0,
+    );
+
     return (
         <>
             <Head title="Suggestion Report" />
@@ -174,6 +214,37 @@ export default function SuggestionReport({
                         Yes, No and "Another way" answers. Use it to see which
                         kinds of suggestion and which reasons can be trusted.
                     </p>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <Field id="report-range" label="Time period">
+                        <ChoiceSelect
+                            id="report-range"
+                            value={filters.range}
+                            placeholder="Time period"
+                            values={[
+                                { value: '30', label: 'Last 30 days' },
+                                { value: '90', label: 'Last 90 days' },
+                                { value: 'all', label: 'All time' },
+                            ]}
+                            onChange={(range) => applyFilters({ range })}
+                        />
+                    </Field>
+                    {barangayCount > 1 && (
+                        <Field id="report-place" label="Place">
+                            <ChoiceSelect
+                                id="report-place"
+                                value={filters.place ?? 'all'}
+                                placeholder="All places"
+                                values={placeChoices}
+                                onChange={(place) =>
+                                    applyFilters({
+                                        place: place === 'all' ? null : place,
+                                    })
+                                }
+                            />
+                        </Field>
+                    )}
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -46,7 +46,7 @@ export function AppSidebarHeader({
                     data-test="barangay-indicator"
                 >
                     <MapPin className="size-5 text-blue-600" />
-                    {auth.barangay_name ?? 'All Barangays'}
+                    {auth.scope_label}
                 </span>
                 <RoleBadge role={auth.role_name} />
                 <span className="hidden max-w-48 truncate text-base font-semibold sm:block">

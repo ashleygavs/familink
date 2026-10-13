@@ -17,6 +17,7 @@ export type Auth = {
     role_name: RoleName | null;
     barangay_id: number | null;
     barangay_name: string | null;
+    scope_label: string | null;
 };
 
 export type Passkey = {

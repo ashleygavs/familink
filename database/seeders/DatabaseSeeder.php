@@ -24,7 +24,7 @@ class DatabaseSeeder extends Seeder
         $sanJose = Barangay::query()->where('name', 'San Jose')->firstOrFail();
 
         $accounts = [
-            ['Ashley Gavino', 'ashleyvenicegavino0728@gmail.com', RoleName::SuperAdmin, null],
+            ['Super Admin', 'superadmin@familink.test', RoleName::SuperAdmin, null],
             ['Municipal Admin', 'admin@familink.test', RoleName::Admin, null],
             ['Audit Stakeholder', 'stakeholder@familink.test', RoleName::Stakeholder, null],
             ['Barangay Encoder', 'encoder@familink.test', RoleName::User, $sanJose->id],

@@ -46,8 +46,10 @@ class UserController extends Controller
                 'municipality_name' => $user->municipality?->name,
                 'managed_barangay_ids' => $user->managedBarangays->pluck('id')->all(),
                 'managed_barangay_names' => $user->managedBarangays->pluck('name')->all(),
+                'active' => $user->isActive(),
                 'can_edit' => $actor->can('update', $user),
-                'can_delete' => $actor->can('delete', $user),
+                'can_toggle' => $actor->can('deactivate', $user) || (! $user->isActive() && $actor->can('reactivate', $user)),
+                'can_delete' => $actor->can('delete', $user) && ! $user->hasHistory(),
             ]);
 
         return Inertia::render('admin/users', [
@@ -83,9 +85,43 @@ class UserController extends Controller
         return back()->with('success', "Account updated for {$user->name}.");
     }
 
-    public function destroy(Request $request, User $user): RedirectResponse
+    public function deactivate(User $user): RedirectResponse
+    {
+        Gate::authorize('deactivate', $user);
+
+        $lastSuperAdmin = $user->hasRole(RoleName::SuperAdmin)
+            && ! User::query()->whereKeyNot($user->id)->whereNull('deactivated_at')
+                ->whereHas('role', fn ($role) => $role->where('name', RoleName::SuperAdmin->value))->exists();
+
+        if ($lastSuperAdmin) {
+            return back()->withErrors(['user' => 'This is the last active super admin, so it cannot be deactivated.']);
+        }
+
+        $user->forceFill(['deactivated_at' => Carbon::now()])->save();
+
+        return back()->with('success', "{$user->name} was deactivated and can no longer sign in.");
+    }
+
+    public function reactivate(User $user): RedirectResponse
+    {
+        Gate::authorize('reactivate', $user);
+
+        $user->forceFill(['deactivated_at' => null])->save();
+
+        return back()->with('success', "{$user->name} can sign in again.");
+    }
+
+    /**
+     * Deleting is only for accounts made by mistake. Anyone with approvals, scans, events or recorded
+     * answers is deactivated instead, so the history keeps its author.
+     */
+    public function destroy(User $user): RedirectResponse
     {
         Gate::authorize('delete', $user);
+
+        if ($user->hasHistory()) {
+            return back()->withErrors(['user' => "{$user->name} has records, so deactivate the account instead of deleting it."]);
+        }
 
         $user->delete();
 

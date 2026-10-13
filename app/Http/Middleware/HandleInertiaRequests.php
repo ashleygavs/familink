@@ -43,6 +43,7 @@ class HandleInertiaRequests extends Middleware
                 'role_name' => $request->user()?->role?->name,
                 'barangay_id' => $request->user()?->barangay_id,
                 'barangay_name' => $request->user()?->barangay?->name,
+                'scope_label' => $request->user()?->scopeLabel(),
             ],
             'flash' => [
                 'status' => fn () => $request->session()->get('status'),

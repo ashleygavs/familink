@@ -1,5 +1,5 @@
 import { Head, useForm, usePage } from '@inertiajs/react';
-import { Pencil, Plus, Trash2, UserCog } from 'lucide-react';
+import { Pencil, Plus, Trash2, UserCheck, UserCog, UserX } from 'lucide-react';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import UserController from '@/actions/App/Http/Controllers/UserController';
@@ -31,7 +31,9 @@ type StaffUser = {
     municipality_name: string | null;
     managed_barangay_ids: number[];
     managed_barangay_names: string[];
+    active: boolean;
     can_edit: boolean;
+    can_toggle: boolean;
     can_delete: boolean;
 };
 
@@ -289,7 +291,10 @@ export default function Users({
     municipalities,
     assignableRoles,
 }: Props) {
-    const { auth } = usePage().props;
+    const { auth, errors } = usePage<{ errors: Record<string, string> }>()
+        .props;
+    const [deactivating, setDeactivating] = useState<StaffUser | null>(null);
+    const toggling = useForm({});
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState<StaffUser | null>(null);
     const [deleting, setDeleting] = useState<StaffUser | null>(null);
@@ -322,6 +327,15 @@ export default function Users({
                     </Button>
                 </div>
 
+                {errors.user && (
+                    <p
+                        role="alert"
+                        className="rounded-xl border-2 border-red-300 bg-red-50 p-4 text-lg font-semibold text-red-900"
+                    >
+                        {errors.user}
+                    </p>
+                )}
+
                 {users.length === 0 ? (
                     <p className="rounded-xl border-2 border-slate-200 p-6 text-lg dark:border-border">
                         No accounts yet.
@@ -343,6 +357,11 @@ export default function Users({
                                                 {roleLabels[user.role]}
                                             </span>
                                         )}
+                                        {!user.active && (
+                                            <span className="rounded-md bg-amber-500 px-2 py-0.5 text-sm font-bold text-black">
+                                                Inactive
+                                            </span>
+                                        )}
                                     </span>
                                     <span className="text-base text-muted-foreground">
                                         {user.email}
@@ -361,6 +380,38 @@ export default function Users({
                                             Edit
                                         </Button>
                                     )}
+                                    {user.can_toggle &&
+                                        (user.active ? (
+                                            <Button
+                                                variant="outline"
+                                                className="border-amber-400 text-amber-800 hover:bg-amber-50 hover:text-amber-900"
+                                                onClick={() =>
+                                                    setDeactivating(user)
+                                                }
+                                            >
+                                                <UserX />
+                                                Deactivate
+                                            </Button>
+                                        ) : (
+                                            <Button
+                                                variant="outline"
+                                                className="border-emerald-400 text-emerald-800 hover:bg-emerald-50"
+                                                disabled={toggling.processing}
+                                                onClick={() =>
+                                                    toggling.post(
+                                                        UserController.reactivate.url(
+                                                            user.id,
+                                                        ),
+                                                        {
+                                                            preserveScroll: true,
+                                                        },
+                                                    )
+                                                }
+                                            >
+                                                <UserCheck />
+                                                Reactivate
+                                            </Button>
+                                        ))}
                                     {user.can_delete && (
                                         <Button
                                             variant="outline"
@@ -399,6 +450,51 @@ export default function Users({
                             onClose={() => setFormOpen(false)}
                         />
                     )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={deactivating !== null}
+                onOpenChange={(isOpen) => !isOpen && setDeactivating(null)}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl">
+                            Deactivate this account?
+                        </DialogTitle>
+                        <DialogDescription className="text-base">
+                            {deactivating?.name} will be signed out and cannot
+                            sign in again until someone reactivates the account.
+                            Their records are kept.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setDeactivating(null)}
+                        >
+                            Keep active
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            disabled={toggling.processing}
+                            onClick={() =>
+                                deactivating &&
+                                toggling.post(
+                                    UserController.deactivate.url(
+                                        deactivating.id,
+                                    ),
+                                    {
+                                        preserveScroll: true,
+                                        onFinish: () => setDeactivating(null),
+                                    },
+                                )
+                            }
+                        >
+                            <UserX />
+                            Yes, deactivate
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
 

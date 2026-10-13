@@ -22,6 +22,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property string $name
  * @property string $email
  * @property Carbon|null $email_verified_at
+ * @property Carbon|null $deactivated_at
  * @property string $password
  * @property int|null $role_id
  * @property int|null $barangay_id
@@ -95,11 +96,47 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
         return $this->barangay_id === null ? [] : [$this->barangay_id];
     }
 
+    /**
+     * Where this user works, for display: "All Barangays", "Bacolor: San Jose, Cabalantian" for an admin,
+     * or the encoder's own barangay.
+     */
+    public function scopeLabel(): string
+    {
+        if ($this->accessibleBarangayIds() === null) {
+            return 'All Barangays';
+        }
+
+        if ($this->hasRole(RoleName::Admin)) {
+            $names = $this->managedBarangays()->orderBy('name')->pluck('name');
+
+            return trim(($this->municipality_id === null ? 'No municipality' : $this->municipality->name).': '.($names->isEmpty() ? 'no barangays yet' : $names->implode(', ')));
+        }
+
+        return $this->barangay?->name === null ? 'No barangay assigned' : 'Barangay '.$this->barangay->name;
+    }
+
     public function canAccessBarangay(?int $barangayId): bool
     {
         $ids = $this->accessibleBarangayIds();
 
         return $ids === null || ($barangayId !== null && in_array($barangayId, $ids, true));
+    }
+
+    public function isActive(): bool
+    {
+        return $this->deactivated_at === null;
+    }
+
+    /**
+     * Whether this account has approved, scanned, created events or answered suggestions, which a delete
+     * would orphan. Such accounts are deactivated, never deleted.
+     */
+    public function hasHistory(): bool
+    {
+        return Resident::query()->where('approved_by_user_id', $this->id)->exists()
+            || ReliefLog::query()->where('scanned_by_user_id', $this->id)->exists()
+            || ReliefEvent::query()->where('created_by_user_id', $this->id)->exists()
+            || SuggestionFeedback::query()->where('decided_by_user_id', $this->id)->exists();
     }
 
     public function hasRole(RoleName|string ...$roles): bool
@@ -120,6 +157,7 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     {
         return [
             'email_verified_at' => 'datetime',
+            'deactivated_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
         ];

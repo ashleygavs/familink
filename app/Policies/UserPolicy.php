@@ -33,6 +33,20 @@ class UserPolicy
     }
 
     /**
+     * Whoever may edit an account may switch it off and on again, except their own and the last active
+     * super admin, so nobody is locked out of the system.
+     */
+    public function deactivate(User $actor, User $target): bool
+    {
+        return $actor->isNot($target) && $this->update($actor, $target);
+    }
+
+    public function reactivate(User $actor, User $target): bool
+    {
+        return $this->update($actor, $target);
+    }
+
+    /**
      * Only a super admin deletes accounts, and never their own.
      */
     public function delete(User $actor, User $target): bool

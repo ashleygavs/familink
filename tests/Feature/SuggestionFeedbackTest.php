@@ -197,3 +197,78 @@ it('shows an empty report and keeps it away from encoders and stakeholders', fun
     $this->actingAs(User::factory()->withRole(RoleName::Stakeholder)->create())->get(route('admin.suggestion-report'))->assertForbidden();
     $this->actingAs(User::factory()->withRole(RoleName::SuperAdmin)->create())->get(route('admin.suggestion-report'))->assertOk();
 });
+
+/**
+ * The "all answers" total the report shows for a user and query.
+ *
+ * @param  array<string, string>  $query
+ */
+function reportTotal(User $user, array $query = []): int
+{
+    $total = null;
+
+    test()->actingAs($user)->get(route('admin.suggestion-report', $query))->assertOk()
+        ->assertInertia(function ($page) use (&$total): void {
+            $total = $page->toArray()['props']['totals']['all'];
+        });
+
+    return $total;
+}
+
+it('counts reasons that only differ by a number or a name as one', function () {
+    $subject = ($this->make)('Subject', 'Male', '2005-01-01');
+
+    foreach (['About 22 years older', 'About 31 years older', 'Parent of your cousin Marcus', 'Parent of your cousin Rica', 'Child of Pedro, your grandparent'] as $index => $reason) {
+        SuggestionFeedback::query()->create([
+            'resident_id' => $subject->id, 'candidate_id' => ($this->make)("Other{$index}", 'Male', '1980-01-01')->id, 'role' => 'uncle_aunt',
+            'decision' => 'accepted', 'confidence' => 'high', 'reasons' => [$reason], 'context' => 'registration',
+        ]);
+    }
+
+    $this->actingAs($this->admin)->get(route('admin.suggestion-report'))->assertInertia(function ($page) {
+        $reasons = collect($page->toArray()['props']['byReason'])->keyBy('key');
+
+        expect($reasons['Age gap fits (older)']['total'])->toBe(2)
+            ->and($reasons['Parent of your cousin']['total'])->toBe(2)
+            ->and($reasons['Child of your grandparent']['total'])->toBe(1)
+            ->and($reasons)->not->toHaveKey('About 22 years older');
+    });
+});
+
+it('limits the report to the chosen time range, defaulting to 90 days', function () {
+    $subject = ($this->make)('Subject', 'Male', '2005-01-01');
+
+    foreach (['10 days', '60 days', '200 days'] as $index => $ago) {
+        SuggestionFeedback::query()->forceCreate([
+            'resident_id' => $subject->id, 'candidate_id' => ($this->make)("Other{$index}", 'Male', '1980-01-01')->id, 'role' => 'father',
+            'decision' => 'accepted', 'confidence' => 'high', 'reasons' => ['Same surname'], 'context' => 'registration',
+            'created_at' => now()->sub($ago),
+        ]);
+    }
+
+    expect(reportTotal($this->admin))->toBe(2)
+        ->and(reportTotal($this->admin, ['range' => '30']))->toBe(1)
+        ->and(reportTotal($this->admin, ['range' => 'all']))->toBe(3);
+});
+
+it('filters by municipality or barangay and never beyond what the viewer may see', function () {
+    $other = Barangay::factory()->create();
+    $mine = ($this->make)('Mine', 'Male', '2005-01-01');
+    $foreign = Resident::factory()->create(['barangay_id' => $other->id, 'household_id' => Household::factory()->create(['barangay_id' => $other->id])->id]);
+
+    foreach ([$mine, $foreign] as $index => $subject) {
+        SuggestionFeedback::query()->create([
+            'resident_id' => $subject->id, 'candidate_id' => ($this->make)("Other{$index}", 'Male', '1980-01-01')->id, 'role' => 'father',
+            'decision' => 'accepted', 'confidence' => 'high', 'reasons' => ['Same surname'], 'context' => 'registration',
+        ]);
+    }
+
+    $superAdmin = User::factory()->withRole(RoleName::SuperAdmin)->create();
+
+    expect(reportTotal($superAdmin))->toBe(2)
+        ->and(reportTotal($superAdmin, ['place' => "b:{$other->id}"]))->toBe(1)
+        ->and(reportTotal($superAdmin, ['place' => "m:{$this->barangay->municipality_id}"]))->toBe(1)
+        ->and(reportTotal($this->admin, ['place' => "b:{$other->id}"]))->toBe(0);
+
+    $this->actingAs($superAdmin)->get(route('admin.suggestion-report', ['range' => 'bad']))->assertSessionHasErrors('range');
+});

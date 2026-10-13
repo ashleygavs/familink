@@ -59,10 +59,7 @@ export default function Dashboard({ stats }: { stats: Stats }) {
                     </h1>
                     <p className="mt-1 text-lg text-muted-foreground">
                         Here is a quick summary of FamiLink
-                        {auth.barangay_name
-                            ? ` for Barangay ${auth.barangay_name}`
-                            : ''}
-                        .
+                        {auth.scope_label ? ` for ${auth.scope_label}` : ''}.
                     </p>
                 </div>
 

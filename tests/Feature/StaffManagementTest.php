@@ -161,3 +161,72 @@ it('only shows an admin the residents of the barangays they handle', function ()
     $this->actingAs($this->admin)->post(route('admin.approvals.approve', $outside))->assertForbidden();
     $this->actingAs($this->admin)->post(route('admin.approvals.approve', $inside))->assertRedirect();
 });
+
+it('labels each role with the place it actually works in', function () {
+    $encoder = User::factory()->withRole(RoleName::User)->create(['barangay_id' => $this->mine->id]);
+    $this->admin->managedBarangays()->sync([$this->mine->id, $this->second->id]);
+
+    expect($this->superAdmin->scopeLabel())->toBe('All Barangays')
+        ->and($this->admin->fresh()->scopeLabel())->toBe("{$this->municipality->name}: ".collect([$this->mine->name, $this->second->name])->sort()->implode(', '))
+        ->and($encoder->scopeLabel())->toBe("Barangay {$this->mine->name}");
+});
+
+it('blocks a deactivated account from signing in with a clear message', function () {
+    $encoder = User::factory()->withRole(RoleName::User)->create(['barangay_id' => $this->mine->id, 'password' => 'secret-pass-123', 'deactivated_at' => now()]);
+
+    $this->post(route('login'), ['email' => $encoder->email, 'password' => 'secret-pass-123'])
+        ->assertSessionHasErrors(['email' => 'This account is deactivated. Please contact your administrator.']);
+    $this->assertGuest();
+
+    $this->post(route('login'), ['email' => $encoder->email, 'password' => 'wrong-password'])
+        ->assertSessionHasErrors('email');
+});
+
+it('signs out an already logged in account as soon as it is deactivated', function () {
+    $encoder = User::factory()->withRole(RoleName::User)->create(['barangay_id' => $this->mine->id]);
+
+    $this->actingAs($encoder)->get(route('dashboard'))->assertOk();
+    $this->actingAs($this->admin)->post(route('admin.users.deactivate', $encoder))->assertSessionHas('success');
+
+    $this->actingAs($encoder->fresh())->get(route('dashboard'))->assertRedirect(route('login'));
+    $this->assertGuest();
+});
+
+it('lets an admin deactivate and reactivate only their own encoders', function () {
+    $mine = User::factory()->withRole(RoleName::User)->create(['barangay_id' => $this->mine->id]);
+    $foreign = User::factory()->withRole(RoleName::User)->create(['barangay_id' => $this->other->id]);
+
+    $this->actingAs($this->admin)->post(route('admin.users.deactivate', $mine))->assertRedirect();
+    expect($mine->fresh()->isActive())->toBeFalse();
+
+    $this->actingAs($this->admin)->post(route('admin.users.reactivate', $mine))->assertRedirect();
+    expect($mine->fresh()->isActive())->toBeTrue();
+
+    $this->actingAs($this->admin)->post(route('admin.users.deactivate', $foreign))->assertForbidden();
+    $this->actingAs($this->admin)->post(route('admin.users.deactivate', $this->superAdmin))->assertForbidden();
+});
+
+it('never lets someone deactivate themselves or the last active super admin', function () {
+    $this->actingAs($this->superAdmin)->post(route('admin.users.deactivate', $this->superAdmin))->assertForbidden();
+
+    $second = User::factory()->withRole(RoleName::SuperAdmin)->create();
+    $this->actingAs($this->superAdmin)->post(route('admin.users.deactivate', $second))->assertRedirect();
+    expect($second->fresh()->isActive())->toBeFalse();
+
+    $third = User::factory()->withRole(RoleName::SuperAdmin)->create(['deactivated_at' => now()]);
+    $this->actingAs($second->fresh()->forceFill(['deactivated_at' => null]))->post(route('admin.users.deactivate', $this->superAdmin))->assertRedirect();
+    expect($this->superAdmin->fresh()->isActive())->toBeTrue()->and($third->isActive())->toBeFalse();
+});
+
+it('refuses to delete an account that has records but deletes one without', function () {
+    $approver = User::factory()->withRole(RoleName::Admin)->create();
+    $resident = Resident::factory()->pending()->create(['approved_by_user_id' => $approver->id]);
+    $unused = User::factory()->withRole(RoleName::User)->create(['barangay_id' => $this->mine->id]);
+
+    $this->actingAs($this->superAdmin)->delete(route('admin.users.destroy', $approver))->assertSessionHasErrors('user');
+    expect(User::query()->find($approver->id))->not->toBeNull()
+        ->and($resident->fresh()->approved_by_user_id)->toBe($approver->id);
+
+    $this->actingAs($this->superAdmin)->delete(route('admin.users.destroy', $unused))->assertSessionHasNoErrors();
+    expect(User::query()->find($unused->id))->toBeNull();
+});

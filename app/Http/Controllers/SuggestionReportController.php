@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Actions\Residents\RecordSuggestionFeedback;
 use App\Enums\RelativeKind;
+use App\Models\Barangay;
+use App\Models\Municipality;
 use App\Models\SuggestionFeedback;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -18,6 +21,15 @@ class SuggestionReportController extends Controller
      */
     public function __invoke(Request $request): Response
     {
+        $user = $request->user();
+        $input = $request->validate([
+            'range' => ['nullable', 'in:30,90,all'],
+            'place' => ['nullable', 'regex:/^[mb]:\d+$/'],
+        ]);
+        $range = $input['range'] ?? '90';
+        $place = $input['place'] ?? null;
+        $placeIds = $place === null ? null : $this->barangayIdsFor($place, $user->accessibleBarangayIds());
+
         $totals = ['accepted' => 0, 'rejected' => 0, 'unsure' => 0, 'reclassified' => 0];
         $byRole = [];
         $byConfidence = [];
@@ -25,7 +37,9 @@ class SuggestionReportController extends Controller
         $moved = [];
 
         SuggestionFeedback::query()
-            ->whereHas('resident', fn ($resident) => $resident->visibleTo($request->user()))
+            ->whereHas('resident', fn ($resident) => $resident->visibleTo($user)
+                ->when($placeIds !== null, fn ($scoped) => $scoped->whereIn('barangay_id', $placeIds)))
+            ->when($range !== 'all', fn ($query) => $query->where('created_at', '>=', Carbon::now()->subDays((int) $range)))
             ->orderBy('id')
             ->lazy(1000)
             ->each(function (SuggestionFeedback $feedback) use (&$totals, &$byRole, &$byConfidence, &$byReason, &$moved): void {
@@ -37,8 +51,8 @@ class SuggestionReportController extends Controller
                     $this->count($byConfidence, $feedback->confidence, $decision);
                 }
 
-                foreach ((array) $feedback->reasons as $reason) {
-                    $this->count($byReason, (string) $reason, $decision);
+                foreach (array_unique(array_map(fn ($reason): string => $this->generalReason((string) $reason), (array) $feedback->reasons)) as $reason) {
+                    $this->count($byReason, $reason, $decision);
                 }
 
                 if ($decision === 'reclassified' && $feedback->reclassified_as !== null) {
@@ -53,7 +67,62 @@ class SuggestionReportController extends Controller
             'byConfidence' => $this->rows($byConfidence, fn (string $key) => $key === 'high' ? 'Strong match' : 'Possible match'),
             'byReason' => array_slice($this->rows($byReason, fn (string $key) => $key), 0, 15),
             'reclassified' => $this->movedRows($moved),
+            'filters' => ['range' => $range, 'place' => $place],
+            'places' => $this->places($user->accessibleBarangayIds()),
         ]);
+    }
+
+    /**
+     * The barangays a chosen place covers, never wider than what the user may see.
+     * A place is `m:ID` for a municipality or `b:ID` for one barangay.
+     *
+     * @param  list<int>|null  $accessible
+     * @return list<int>
+     */
+    private function barangayIdsFor(string $place, ?array $accessible): array
+    {
+        [$kind, $id] = explode(':', $place);
+
+        $ids = $kind === 'm'
+            ? Municipality::query()->findOrFail((int) $id)->barangays()->pluck('id')->map(fn ($barangay): int => (int) $barangay)->all()
+            : [(int) $id];
+
+        return array_values($accessible === null ? $ids : array_intersect($ids, $accessible));
+    }
+
+    /**
+     * Municipalities with the barangays the user may filter by.
+     *
+     * @param  list<int>|null  $accessible
+     * @return array<int, array{id: int, name: string, barangays: array<int, array{id: int, name: string}>}>
+     */
+    private function places(?array $accessible): array
+    {
+        return Municipality::query()
+            ->with(['barangays' => fn ($query) => $query->when($accessible !== null, fn ($inner) => $inner->whereIn('id', $accessible))->orderBy('name')])
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (Municipality $municipality) => $municipality->barangays->isNotEmpty())
+            ->map(fn (Municipality $municipality): array => [
+                'id' => $municipality->id,
+                'name' => $municipality->name,
+                'barangays' => $municipality->barangays->map(fn (Barangay $barangay): array => ['id' => $barangay->id, 'name' => $barangay->name])->values()->all(),
+            ])->values()->all();
+    }
+
+    /**
+     * Reasons that only differ by a number or a person's name count as one, so the table stays readable.
+     * "About 23 years older" becomes "Age gap fits (older)" and "Parent of your cousin Marcus" becomes
+     * "Parent of your cousin".
+     */
+    private function generalReason(string $reason): string
+    {
+        return match (true) {
+            (bool) preg_match('/^About \d+ years (older|younger)$/', $reason, $match) => "Age gap fits ({$match[1]})",
+            (bool) preg_match('/^(.+?) of your (cousin|uncle or aunt|brother or sister|nephew or niece|grandparent|grandchild) .+$/', $reason, $match) => "{$match[1]} of your {$match[2]}",
+            (bool) preg_match('/^(.+?) of .+, your (.+)$/', $reason, $match) => "{$match[1]} of your {$match[2]}",
+            default => $reason,
+        };
     }
 
     /**
