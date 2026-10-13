@@ -9,7 +9,17 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property int $id
+ * @property string $title
+ * @property AllocationType $allocation_type
+ * @property Carbon $start_date
+ * @property Carbon $end_date
+ * @property string $status
+ * @property int $created_by_user_id
+ */
 #[Fillable(['title', 'allocation_type', 'start_date', 'end_date', 'status', 'created_by_user_id'])]
 class ReliefEvent extends Model
 {

@@ -9,16 +9,77 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
+/**
+ * @property int $id
+ * @property string $system_id_no
+ * @property string $qr_code_hash
+ * @property int|null $household_id
+ * @property int|null $barangay_id
+ * @property string $first_name
+ * @property string|null $middle_name
+ * @property string $last_name
+ * @property string|null $maiden_name
+ * @property Carbon $birthdate
+ * @property bool $birthdate_estimated
+ * @property string $gender
+ * @property string|null $civil_status
+ * @property string|null $household_role
+ * @property int|null $spouse_id
+ * @property int|null $father_id
+ * @property int|null $mother_id
+ * @property ResidentStatus $status
+ * @property bool $is_deceased
+ * @property int|null $approved_by_user_id
+ * @property int|null $listed_by_resident_id
+ * @property string|null $first_name_key
+ * @property string|null $middle_name_key
+ * @property string|null $last_name_key
+ * @property string|null $maiden_name_key
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property-read string $full_name
+ */
 #[Fillable([
     'system_id_no', 'qr_code_hash', 'household_id', 'barangay_id',
-    'first_name', 'middle_name', 'last_name', 'birthdate', 'gender', 'civil_status', 'household_role',
-    'spouse_id', 'father_id', 'mother_id', 'status', 'approved_by_user_id',
+    'first_name', 'middle_name', 'last_name', 'maiden_name', 'birthdate', 'birthdate_estimated',
+    'gender', 'civil_status', 'household_role',
+    'spouse_id', 'father_id', 'mother_id', 'status', 'is_deceased',
+    'approved_by_user_id', 'listed_by_resident_id',
 ])]
 class Resident extends Model
 {
     /** @use HasFactory<ResidentFactory> */
     use HasFactory;
+
+    /**
+     * Keep the normalised name keys (used to match relatives) in sync with the names.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (Resident $resident): void {
+            $resident->first_name_key = self::normalizeName($resident->first_name);
+            $resident->middle_name_key = self::normalizeName($resident->middle_name);
+            $resident->last_name_key = self::normalizeName($resident->last_name);
+            $resident->maiden_name_key = self::normalizeName($resident->maiden_name);
+        });
+    }
+
+    /**
+     * Reduce a name to lowercase letters only, so "Dela Cruz", "De la Cruz" and "DELACRUZ" match.
+     */
+    public static function normalizeName(?string $name): ?string
+    {
+        if ($name === null) {
+            return null;
+        }
+
+        $key = preg_replace('/[^a-z]/', '', Str::lower(Str::ascii($name)));
+
+        return $key === '' || $key === null ? null : $key;
+    }
 
     /**
      * @return array<string, string>
@@ -27,6 +88,8 @@ class Resident extends Model
     {
         return [
             'birthdate' => 'date',
+            'birthdate_estimated' => 'boolean',
+            'is_deceased' => 'boolean',
             'status' => ResidentStatus::class,
         ];
     }
@@ -82,6 +145,16 @@ class Resident extends Model
     public function approvedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'approved_by_user_id');
+    }
+
+    /**
+     * The resident who declared this person as a relative before they registered.
+     *
+     * @return BelongsTo<Resident, $this>
+     */
+    public function listedBy(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'listed_by_resident_id');
     }
 
     /**

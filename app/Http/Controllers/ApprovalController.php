@@ -1,0 +1,139 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Actions\Residents\FindFamilyMatches;
+use App\Actions\Residents\LinkRelatives;
+use App\Enums\ResidentStatus;
+use App\Http\Requests\LinkRelativesRequest;
+use App\Http\Resources\FamilySuggestionsResource;
+use App\Models\RelativeLink;
+use App\Models\Resident;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class ApprovalController extends Controller
+{
+    /**
+     * List residents waiting for approval, oldest first, with suggested family links.
+     */
+    public function index(FindFamilyMatches $findFamilyMatches): Response
+    {
+        $pending = Resident::query()
+            ->with(['barangay', 'household', 'father', 'mother'])
+            ->where('status', ResidentStatus::Pending->value)
+            ->oldest()
+            ->paginate(10)
+            ->through(fn (Resident $resident) => [
+                'id' => $resident->id,
+                'full_name' => $resident->full_name,
+                'system_id_no' => $resident->system_id_no,
+                'birthdate' => $resident->birthdate->toDateString(),
+                'gender' => $resident->gender,
+                'civil_status' => $resident->civil_status,
+                'household_role' => $resident->household_role,
+                'barangay_name' => $resident->barangay?->name,
+                'household_code' => $resident->household?->household_code,
+                'father_name' => $resident->father?->full_name,
+                'mother_name' => $resident->mother?->full_name,
+                'registered_at' => $resident->created_at?->toIso8601String(),
+                'declared_relatives' => $this->declaredRelatives($resident),
+                'suggestions' => $this->suggestionsFor($findFamilyMatches, $resident),
+            ]);
+
+        return Inertia::render('admin/approvals', ['pending' => $pending]);
+    }
+
+    public function approve(Request $request, Resident $resident): RedirectResponse
+    {
+        return $this->decide($resident, ResidentStatus::Approved, $request, 'approved');
+    }
+
+    public function archive(Request $request, Resident $resident): RedirectResponse
+    {
+        return $this->decide($resident, ResidentStatus::Archived, $request, 'archived');
+    }
+
+    /**
+     * Confirm suggested family links for a pending resident.
+     */
+    public function links(LinkRelativesRequest $request, Resident $resident, LinkRelatives $linkRelatives): RedirectResponse
+    {
+        abort_unless($resident->status === ResidentStatus::Pending, 409, 'This resident is no longer pending.');
+
+        $linkRelatives->handle($resident, $request->validated());
+
+        return back()->with('success', "Family links saved for {$resident->full_name}.");
+    }
+
+    /**
+     * The relatives the resident named when registering, plus those who named the resident.
+     *
+     * @return array<int, array{relation: string, name: string, system_id_no: string}>
+     */
+    private function declaredRelatives(Resident $resident): array
+    {
+        return RelativeLink::query()
+            ->with(['resident', 'relative'])
+            ->where('resident_id', $resident->id)
+            ->orWhere('relative_id', $resident->id)
+            ->get()
+            ->map(function (RelativeLink $link) use ($resident): array {
+                $named = $link->resident_id === $resident->id;
+                $other = $named ? $link->relative : $link->resident;
+
+                return [
+                    'relation' => ($named ? $link->relation : $link->relation->inverse())->label(),
+                    'name' => $other->full_name,
+                    'system_id_no' => $other->system_id_no,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Suggestions for the family slots that are still empty.
+     *
+     * @return array<string, mixed>
+     */
+    private function suggestionsFor(FindFamilyMatches $findFamilyMatches, Resident $resident): array
+    {
+        $matches = $findFamilyMatches->handle([
+            'first_name' => $resident->first_name,
+            'middle_name' => $resident->middle_name,
+            'maiden_name' => $resident->maiden_name,
+            'last_name' => $resident->last_name,
+            'birthdate' => $resident->birthdate->toDateString(),
+            'gender' => $resident->gender,
+            'civil_status' => $resident->civil_status,
+            'household_id' => $resident->household_id,
+            'barangay_id' => $resident->barangay_id,
+        ], null, $resident);
+
+        $matches['claims'] = [];
+        $matches['relatives'] = [];
+
+        foreach (['father' => 'father_id', 'mother' => 'mother_id', 'spouse' => 'spouse_id'] as $slot => $column) {
+            if ($resident->{$column} !== null) {
+                $matches[$slot] = [];
+            }
+        }
+
+        return FamilySuggestionsResource::make($matches)->resolve();
+    }
+
+    private function decide(Resident $resident, ResidentStatus $status, Request $request, string $verb): RedirectResponse
+    {
+        abort_unless($resident->status === ResidentStatus::Pending, 409, 'This resident is no longer pending.');
+
+        $resident->update([
+            'status' => $status,
+            'approved_by_user_id' => $status === ResidentStatus::Approved ? $request->user()->id : null,
+        ]);
+
+        return back()->with('success', "{$resident->full_name} was {$verb}.");
+    }
+}

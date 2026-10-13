@@ -53,7 +53,7 @@ it('seeds roles, barangays, one user per role and a linked test family', functio
     expect(User::query()->whereNotNull('role_id')->count())->toBe(4)
         ->and(User::query()->where('email', 'ashleyvenicegavino0728@gmail.com')->first()->hasRole(RoleName::SuperAdmin))->toBeTrue();
 
-    $child = Resident::query()->where('system_id_no', 'FL-00000003')->firstOrFail();
+    $child = Resident::query()->where('system_id_no', 'FL-2026-SJ-00003')->firstOrFail();
 
     expect($child->father->first_name)->toBe('Juan')
         ->and($child->mother->first_name)->toBe('Maria')

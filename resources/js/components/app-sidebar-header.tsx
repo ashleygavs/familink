@@ -5,6 +5,7 @@ import { RoleBadge } from '@/components/role-badge';
 import { buttonVariants } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
+import { clearRegistrationDrafts } from '@/lib/registration-draft';
 import { logout } from '@/routes';
 import type { BreadcrumbItem as BreadcrumbItemType } from '@/types';
 
@@ -18,6 +19,7 @@ export function AppSidebarHeader({
 
     const handleLogout = () => {
         cleanup();
+        clearRegistrationDrafts();
         router.flushAll();
     };
 

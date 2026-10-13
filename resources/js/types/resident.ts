@@ -1,0 +1,66 @@
+import type { FamilySuggestions } from './registration';
+
+export type HouseholdSummary = {
+    id: number;
+    household_code: string;
+    street_address: string;
+    barangay_id: number;
+    head_name?: string | null;
+};
+
+export type ResidentOption = {
+    id: number;
+    full_name: string;
+    system_id_no: string;
+    birthdate: string;
+    gender: 'Male' | 'Female';
+    status: string;
+    birthdate_estimated: boolean;
+    is_deceased: boolean;
+    barangay_id: number | null;
+    barangay_name: string | null;
+    household: HouseholdSummary | null;
+};
+
+export type HouseholdOption = HouseholdSummary & {
+    head_name?: string | null;
+    members_count?: number;
+};
+
+export type RegisteredResident = {
+    id: number;
+    full_name: string;
+    system_id_no: string;
+    household_code: string;
+    qr_code_hash: string;
+};
+
+export type PendingResident = {
+    id: number;
+    full_name: string;
+    system_id_no: string;
+    birthdate: string;
+    gender: string;
+    civil_status: string;
+    household_role: string | null;
+    barangay_name: string | null;
+    household_code: string | null;
+    father_name: string | null;
+    mother_name: string | null;
+    registered_at: string | null;
+    declared_relatives: {
+        relation: string;
+        name: string;
+        system_id_no: string;
+    }[];
+    suggestions: FamilySuggestions;
+};
+
+export type Paginated<T> = {
+    data: T[];
+    current_page: number;
+    last_page: number;
+    total: number;
+    prev_page_url: string | null;
+    next_page_url: string | null;
+};

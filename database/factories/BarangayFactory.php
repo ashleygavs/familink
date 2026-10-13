@@ -17,6 +17,7 @@ class BarangayFactory extends Factory
     {
         return [
             'name' => fake()->unique()->streetName(),
+            'code' => strtoupper(fake()->unique()->lexify('???')),
             'municipality' => fake()->city(),
             'province' => fake()->city(),
         ];

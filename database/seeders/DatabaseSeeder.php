@@ -46,7 +46,7 @@ class DatabaseSeeder extends Seeder
     private function seedTestFamily(Barangay $barangay): void
     {
         $household = Household::query()->firstOrCreate(
-            ['household_code' => 'HH-000001'],
+            ['household_code' => 'HH-SJ-0001'],
             ['barangay_id' => $barangay->id, 'street_address' => '12 Rizal Street'],
         );
 
@@ -62,17 +62,17 @@ class DatabaseSeeder extends Seeder
             ],
         );
 
-        $father = $make('FL-00000001', [
+        $father = $make('FL-2026-SJ-00001', [
             'first_name' => 'Juan', 'birthdate' => '1980-03-14', 'gender' => 'Male',
             'civil_status' => 'Married', 'household_role' => 'Head',
         ]);
-        $mother = $make('FL-00000002', [
+        $mother = $make('FL-2026-SJ-00002', [
             'first_name' => 'Maria', 'birthdate' => '1983-07-02', 'gender' => 'Female',
             'civil_status' => 'Married', 'household_role' => 'Spouse', 'spouse_id' => $father->id,
         ]);
         $father->update(['spouse_id' => $mother->id]);
 
-        $make('FL-00000003', [
+        $make('FL-2026-SJ-00003', [
             'first_name' => 'Pedro', 'birthdate' => '2008-11-20', 'gender' => 'Male',
             'civil_status' => 'Single', 'household_role' => 'Child',
             'father_id' => $father->id, 'mother_id' => $mother->id,

@@ -12,10 +12,12 @@ class BarangaySeeder extends Seeder
      */
     public function run(): void
     {
-        foreach (['San Jose', 'Cabalantian'] as $name) {
+        $barangays = ['San Jose' => 'SJ', 'Cabalantian' => 'CAB'];
+
+        foreach ($barangays as $name => $code) {
             Barangay::query()->updateOrCreate(
                 ['name' => $name],
-                ['municipality' => 'Bacolor', 'province' => 'Pampanga'],
+                ['code' => $code, 'municipality' => 'Bacolor', 'province' => 'Pampanga'],
             );
         }
     }

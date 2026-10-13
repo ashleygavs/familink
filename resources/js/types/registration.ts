@@ -1,0 +1,124 @@
+import type { HouseholdOption, ResidentOption } from './resident';
+
+export type FamilyPath = 'new' | 'existing';
+
+export type Gender = 'Male' | 'Female';
+
+/** A relative typed in by a first registrant. They become a "Listed" resident. */
+export type RelativeDraft = {
+    first_name: string;
+    middle_name: string;
+    last_name: string;
+    gender: '' | Gender;
+    birthdate: string;
+    approximate_age: string;
+    is_deceased: boolean;
+    lives_with_me: boolean;
+    other_parent_is_spouse: boolean;
+};
+
+export type RelativesDraft = {
+    father: RelativeDraft | null;
+    mother: RelativeDraft | null;
+    spouse: RelativeDraft | null;
+    children: RelativeDraft[];
+    parents_partners: boolean;
+};
+
+export type PersonDraft = {
+    first_name: string;
+    middle_name: string;
+    maiden_name: string;
+    last_name: string;
+    birthdate: string;
+    gender: '' | Gender;
+    civil_status: string;
+};
+
+export type HouseholdDraft = {
+    barangay_id: string;
+    mode: 'new' | 'existing';
+    household: HouseholdOption | null;
+    street_address: string;
+    is_head: boolean;
+    household_role: string;
+};
+
+export type MatchConfidence = 'high' | 'medium';
+
+export type FamilyMatch = {
+    resident: ResidentOption;
+    score: number;
+    confidence: MatchConfidence;
+    reasons: string[];
+};
+
+/** A listed record the registrant may claim ("Is this you?"). */
+export type ClaimedResident = ResidentOption & {
+    listed_by: string | null;
+    father_id: number | null;
+    mother_id: number | null;
+    father_name: string | null;
+    mother_name: string | null;
+    spouse_name: string | null;
+    children_names: string[];
+};
+
+export type ClaimMatch = {
+    resident: ClaimedResident;
+    reasons: string[];
+};
+
+/** A relative worked out from the family links, with how they are related. */
+export type RelativeMatch = {
+    resident: ResidentOption;
+    relation: string;
+};
+
+export type BloodRelatives = {
+    siblings: RelativeMatch[];
+    grandparents: RelativeMatch[];
+    uncles_aunts: RelativeMatch[];
+    cousins: RelativeMatch[];
+};
+
+export type RelativeKind =
+    | 'sibling'
+    | 'grandparent'
+    | 'grandchild'
+    | 'uncle_aunt'
+    | 'nephew_niece'
+    | 'cousin';
+
+/** A registered resident who may be this person's brother or sister, grandparent, uncle or aunt, or cousin. */
+export type RelativeSuggestion = FamilyMatch & { relation: RelativeKind };
+
+export type FamilySuggestions = {
+    claims: ClaimMatch[];
+    father: FamilyMatch[];
+    mother: FamilyMatch[];
+    spouse: FamilyMatch[];
+    children: FamilyMatch[];
+    relatives: RelativeSuggestion[];
+};
+
+/** Everything the stepper remembers, so a reload does not lose progress. */
+export type RegistrationDraft = {
+    version: number;
+    step: number;
+    maxStep: number;
+    path: FamilyPath | null;
+    person: PersonDraft;
+    claim: ClaimedResident | null;
+    dismissedClaims: number[];
+    father: ResidentOption | null;
+    mother: ResidentOption | null;
+    spouse: ResidentOption | null;
+    dependents: ResidentOption[];
+    /** Registered relatives the person knows, used to work out their parents. */
+    viaRelatives: Record<RelativeKind, ResidentOption[]>;
+    linkLater: boolean;
+    relatives: RelativesDraft;
+    household: HouseholdDraft;
+    consent: boolean;
+};

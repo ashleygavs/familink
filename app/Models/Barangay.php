@@ -8,7 +8,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'municipality', 'province'])]
+/**
+ * @property int $id
+ * @property string $name
+ * @property string|null $code
+ * @property string $municipality
+ * @property string $province
+ */
+#[Fillable(['name', 'code', 'municipality', 'province'])]
 class Barangay extends Model
 {
     /** @use HasFactory<BarangayFactory> */

@@ -8,6 +8,15 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int $event_id
+ * @property int $resident_id
+ * @property int $household_id
+ * @property int $scanned_by_user_id
+ * @property string $status
+ * @property string|null $remarks
+ */
 #[Fillable(['event_id', 'resident_id', 'household_id', 'scanned_by_user_id', 'status', 'remarks'])]
 class ReliefLog extends Model
 {

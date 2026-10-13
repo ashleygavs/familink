@@ -42,4 +42,17 @@ class ResidentFactory extends Factory
     {
         return $this->state(fn (array $attributes) => ['status' => ResidentStatus::Pending]);
     }
+
+    /**
+     * A relative declared by a family member who has not registered yet.
+     */
+    public function listed(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => ResidentStatus::Listed,
+            'household_id' => null,
+            'barangay_id' => null,
+            'civil_status' => null,
+        ]);
+    }
 }

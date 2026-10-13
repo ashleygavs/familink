@@ -141,3 +141,14 @@
         @apply bg-background text-foreground;
     }
 }
+
+@media print {
+    body * {
+        visibility: hidden;
+    }
+
+    #print-qr,
+    #print-qr * {
+        visibility: visible;
+    }
+}
