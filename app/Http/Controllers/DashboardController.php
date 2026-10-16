@@ -26,7 +26,7 @@ class DashboardController extends Controller
 
         return Inertia::render('dashboard', [
             'stats' => [
-                'approvedResidents' => (clone $residents)->where('status', ResidentStatus::Approved)->count(),
+                'approvedResidents' => (clone $residents)->where('status', ResidentStatus::Approved)->where('is_deceased', false)->count(),
                 'pendingResidents' => (clone $residents)->where('status', ResidentStatus::Pending)->count(),
                 'households' => Household::query()->when($barangayIds !== null, fn ($query) => $query->whereIn('barangay_id', $barangayIds))->count(),
                 'reliefClaims' => ReliefLog::query()

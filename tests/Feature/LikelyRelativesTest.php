@@ -196,3 +196,44 @@ it('works from a hand-built context without a middle name', function () {
 
     expect(app(FindLikelyRelatives::class)->handle($context, []))->not->toBe([]);
 });
+
+it('does not turn the children of a weakly suggested parent into strong siblings', function () {
+    // Gabriel Aquino's mother was a Reyes, so a woman named Reyes is only a weak guess for his mother.
+    $ana = ($this->make)('Ana', 'Female', '1987-06-10', ['last_name' => 'Reyes']);
+    ($this->make)('Miguel', 'Male', '2012-09-09', ['last_name' => 'Reyes', 'mother_id' => $ana->id]);
+    ($this->make)('Rico', 'Male', '2015-03-03', ['last_name' => 'Reyes', 'mother_id' => $ana->id]);
+
+    $person = relativesPerson(['first_name' => 'Gabriel', 'middle_name' => 'Reyes', 'last_name' => 'Aquino', 'birthdate' => '2010-02-14', 'gender' => 'Male']);
+    $matches = app(FindFamilyMatches::class)->handle($person);
+    $relatives = collect($matches['relatives'])->groupBy('relation')->map(fn ($group) => $group->keyBy(fn (array $match) => $match['resident']->first_name));
+
+    expect($matches['mother'][0]['confidence'])->toBe('medium')
+        ->and($relatives->has('sibling'))->toBeFalse()
+        ->and($relatives['cousin']['Miguel']['confidence'])->toBe('medium')
+        ->and($relatives['cousin']['Miguel']['score'])->toBeLessThan(70);
+});
+
+it('never calls a match strong when the only link is a shared family name', function () {
+    // Luis and his mother are both Reyes, which matches Gabriel's middle name twice over. That is still one fact.
+    $lourdes = ($this->make)('Lourdes', 'Female', '1960-01-01', ['last_name' => 'Reyes']);
+    ($this->make)('Luis', 'Male', '1985-02-02', ['last_name' => 'Reyes', 'mother_id' => $lourdes->id]);
+
+    $person = relativesPerson(['first_name' => 'Gabriel', 'middle_name' => 'Reyes', 'last_name' => 'Aquino', 'birthdate' => '2010-02-14', 'gender' => 'Male']);
+    $matches = collect(app(FindFamilyMatches::class)->handle($person)['relatives'])->where('resident.first_name', 'Luis');
+
+    expect($matches)->not->toBeEmpty()
+        ->and($matches->pluck('confidence')->unique()->all())->toBe(['medium']);
+});
+
+it('still calls a match strong when it also shares the surname, the household or a strong parent', function () {
+    $father = ($this->make)('Mark', 'Male', '1984-10-10', ['last_name' => 'Aquino']);
+    ($this->make)('Marcus', 'Male', '2004-01-21', ['last_name' => 'Aquino', 'father_id' => $father->id]);
+    ($this->make)('Reyesdweller', 'Male', '1985-02-02', ['last_name' => 'Reyes']);
+
+    $person = relativesPerson(['first_name' => 'Gabriel', 'middle_name' => 'Reyes', 'last_name' => 'Aquino', 'birthdate' => '2010-02-14', 'gender' => 'Male', 'household_id' => $this->household->id]);
+    $relatives = collect(app(FindFamilyMatches::class)->handle($person)['relatives']);
+
+    // Same surname and a strongly suggested father: strong. Same household: strong even with only a family-name link.
+    expect($relatives->where('resident.first_name', 'Marcus')->pluck('confidence')->contains('high'))->toBeTrue()
+        ->and($relatives->where('resident.first_name', 'Reyesdweller')->pluck('confidence')->contains('high'))->toBeTrue();
+});

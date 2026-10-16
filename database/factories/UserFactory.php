@@ -54,7 +54,7 @@ class UserFactory extends Factory
 
         // An admin handles the first barangay by default, which is also where household factories place residents.
         return $state->afterCreating(function (User $user): void {
-            $barangay = Barangay::query()->first() ?? Barangay::factory()->create();
+            $barangay = Barangay::query()->orderBy('id')->first() ?? Barangay::factory()->create();
 
             $user->forceFill(['municipality_id' => $barangay->municipality_id])->save();
             $user->managedBarangays()->syncWithoutDetaching([$barangay->id]);

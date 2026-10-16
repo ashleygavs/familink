@@ -102,6 +102,7 @@ class AnalyticsController extends Controller
 
         $residents = Resident::query()
             ->where('status', $approved)
+            ->where('is_deceased', false)
             ->whereIn('barangay_id', $ids)
             ->selectRaw('barangay_id, count(*) as residents, count(distinct household_id) as households_with_residents')
             ->groupBy('barangay_id')
@@ -159,6 +160,7 @@ class AnalyticsController extends Controller
     {
         $perHousehold = Resident::query()
             ->where('status', ResidentStatus::Approved->value)
+            ->where('is_deceased', false)
             ->whereIn('barangay_id', $barangayIds)
             ->selectRaw('barangay_id, household_id, count(*) as members')
             ->groupBy('barangay_id', 'household_id');

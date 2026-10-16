@@ -16,7 +16,6 @@ use App\Models\Resident;
 use Carbon\CarbonInterface;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -451,10 +450,6 @@ class StoreResidentRequest extends FormRequest
      */
     private function properCase(string $value): string
     {
-        $value = trim((string) preg_replace('/\s+/', ' ', $value));
-
-        return $value === mb_strtolower($value) || $value === mb_strtoupper($value)
-            ? Str::title($value)
-            : $value;
+        return Resident::properCase($value);
     }
 }

@@ -30,7 +30,11 @@ class SaveUserRequest extends FormRequest
         $target = $target instanceof User ? $target : null;
 
         return [
-            'name' => ['required', 'string', 'max:255'],
+            // Admins and encoders are named from their place, so only the other roles need a typed name.
+            'name' => [
+                Rule::requiredIf(fn (): bool => ! in_array($this->input('role'), [RoleName::Admin->value, RoleName::User->value], true)),
+                'nullable', 'string', 'max:255',
+            ],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($target)],
             'password' => [$target === null ? 'required' : 'nullable', 'string', Password::defaults()],
             'role' => ['required', Rule::in($this->allowedRoles($target))],

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\HouseholdRole;
 use Database\Factories\HouseholdFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -29,6 +30,19 @@ class Household extends Model
     public function barangay(): BelongsTo
     {
         return $this->belongsTo(Barangay::class);
+    }
+
+    /**
+     * Give the head's place to someone who stays, or to no one when the household is left without a head.
+     */
+    public function passHeadTo(?Resident $successor): void
+    {
+        if ($this->head_resident_id !== null && $this->head_resident_id !== $successor?->id) {
+            Resident::query()->whereKey($this->head_resident_id)->update(['household_role' => HouseholdRole::Other->value]);
+        }
+
+        $this->update(['head_resident_id' => $successor?->id]);
+        $successor?->update(['household_role' => HouseholdRole::Head->value]);
     }
 
     /**

@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Barangay;
+use App\Models\Household;
 use App\Models\Resident;
 use App\Models\User;
 use Database\Seeders\DatabaseSeeder;
@@ -21,7 +23,7 @@ test('dashboard shows summary counts for admins', function () {
     $this->seed(DatabaseSeeder::class);
     Resident::factory()->pending()->create();
 
-    $this->actingAs(User::query()->where('email', 'admin@familink.test')->first())
+    $this->actingAs(User::query()->where('email', 'bac.sanjose.admin@familink.test')->first())
         ->get(route('dashboard'))
         ->assertInertia(fn ($page) => $page
             ->component('dashboard')
@@ -33,9 +35,10 @@ test('dashboard shows summary counts for admins', function () {
 
 test('encoders only see the counts of their own barangay', function () {
     $this->seed(DatabaseSeeder::class);
-    Resident::factory()->create();
+    // A resident of another barangay, who the San Jose encoder must not count.
+    Resident::factory()->create(['household_id' => Household::factory()->create(['barangay_id' => Barangay::factory()])->id]);
 
-    $encoder = User::query()->where('email', 'encoder@familink.test')->first();
+    $encoder = User::query()->where('email', 'bac.sanjose.encoder@familink.test')->first();
 
     $this->actingAs($encoder)
         ->get(route('dashboard'))

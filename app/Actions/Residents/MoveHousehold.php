@@ -102,10 +102,7 @@ class MoveHousehold
             return;
         }
 
-        $successor = $newHeadId === null ? null : Resident::query()->whereKey((int) $newHeadId)->first();
-
-        $old->update(['head_resident_id' => $successor?->id]);
-        $successor?->update(['household_role' => HouseholdRole::Head->value]);
+        $old->passHeadTo($newHeadId === null ? null : Resident::query()->whereKey((int) $newHeadId)->first());
     }
 
     private function summary(?Household $old, Household $new, HouseholdRole $role, bool $created): string
@@ -140,6 +137,10 @@ class MoveHousehold
             $fail('household_id', 'Only registered residents can be moved to another household.');
         }
 
+        if ($resident->is_deceased) {
+            $fail('household_id', 'A deceased resident cannot be moved to another household.');
+        }
+
         if ($destination === null && trim((string) ($target['street_address'] ?? '')) === '') {
             $fail('street_address', 'Enter the address of the new household.');
         }
@@ -157,6 +158,7 @@ class MoveHousehold
                 ->where('household_id', $old->id)
                 ->whereKeyNot($resident->id)
                 ->whereNot('status', ResidentStatus::Archived->value)
+                ->where('is_deceased', false)
                 ->pluck('id');
 
             $chosen = $target['new_head_id'] ?? null;

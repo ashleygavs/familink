@@ -1,10 +1,12 @@
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import {
     ArrowLeft,
+    HeartCrack,
     HeartHandshake,
     History,
     Home,
     Network,
+    Pencil,
     TriangleAlert,
     Users,
 } from 'lucide-react';
@@ -41,6 +43,12 @@ type Props = {
         birthdate: string;
         barangay_name: string | null;
         is_deceased: boolean;
+        deceased_at: string | null;
+        first_name: string;
+        middle_name: string | null;
+        last_name: string;
+        suffix: string | null;
+        maiden_name: string | null;
         is_head: boolean;
     };
     family: {
@@ -55,7 +63,12 @@ type Props = {
         street_address: string;
         role: string | null;
         head_name: string | null;
-        members: { id: number; full_name: string; role: string | null }[];
+        members: {
+            id: number;
+            full_name: string;
+            role: string | null;
+            is_deceased: boolean;
+        }[];
     } | null;
     /** Relief events that are open right now, which pause household changes. */
     openEvents: string[];
@@ -242,8 +255,9 @@ function MoveDialog({
         is_head: false,
         new_head_id: '',
     });
-    const mustChooseHead =
-        resident.is_head && (household?.members.length ?? 0) > 0;
+    const livingMembers =
+        household?.members.filter((m) => !m.is_deceased) ?? [];
+    const mustChooseHead = resident.is_head && livingMembers.length > 0;
 
     function submit(event: FormEvent) {
         event.preventDefault();
@@ -413,7 +427,7 @@ function MoveDialog({
                                 id="move-new-head"
                                 value={form.data.new_head_id}
                                 placeholder="Choose the new head"
-                                values={household.members.map((member) => ({
+                                values={livingMembers.map((member) => ({
                                     value: String(member.id),
                                     label: member.full_name,
                                 }))}
@@ -442,6 +456,254 @@ function MoveDialog({
     );
 }
 
+function DeceasedDialog({
+    resident,
+    household,
+    open,
+    onClose,
+}: {
+    resident: Props['resident'];
+    household: Props['household'];
+    open: boolean;
+    onClose: () => void;
+}) {
+    const form = useForm({ deceased_at: '', new_head_id: '' });
+    const livingMembers =
+        household?.members.filter((m) => !m.is_deceased) ?? [];
+    const mustChooseHead = resident.is_head && livingMembers.length > 0;
+
+    function submit(event: FormEvent) {
+        event.preventDefault();
+        form.transform((data) => ({
+            deceased_at: data.deceased_at || null,
+            new_head_id:
+                mustChooseHead && data.new_head_id
+                    ? Number(data.new_head_id)
+                    : null,
+        }));
+        form.post(ResidentManagementController.deceased.url(resident.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                form.reset();
+                onClose();
+            },
+        });
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle className="text-2xl">
+                        Record a death
+                    </DialogTitle>
+                    <DialogDescription className="text-base">
+                        {resident.full_name} will no longer be able to claim
+                        relief or be counted as eligible. Relief already claimed
+                        stays on record, and a living spouse is marked Widowed.
+                    </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={submit} className="grid gap-4">
+                    <Field
+                        id="deceased-at"
+                        label="Date of death (if known)"
+                        error={form.errors.deceased_at}
+                    >
+                        <Input
+                            id="deceased-at"
+                            type="date"
+                            max={new Date().toISOString().slice(0, 10)}
+                            value={form.data.deceased_at}
+                            onChange={(event) =>
+                                form.setData('deceased_at', event.target.value)
+                            }
+                        />
+                    </Field>
+                    {mustChooseHead && household && (
+                        <Field
+                            id="deceased-new-head"
+                            label={`Who becomes the head of ${household.household_code}?`}
+                            hint="This person heads their household."
+                            error={form.errors.new_head_id}
+                        >
+                            <ChoiceSelect
+                                id="deceased-new-head"
+                                value={form.data.new_head_id}
+                                placeholder="Choose the new head"
+                                values={livingMembers.map((member) => ({
+                                    value: String(member.id),
+                                    label: member.full_name,
+                                }))}
+                                onChange={(id) =>
+                                    form.setData('new_head_id', id)
+                                }
+                            />
+                        </Field>
+                    )}
+                    <DialogFooter className="gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={onClose}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            variant="destructive"
+                            disabled={form.processing}
+                        >
+                            <HeartCrack />
+                            Record death
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+const SUFFIXES = ['Jr.', 'Sr.', 'II', 'III', 'IV', 'V'];
+
+function CorrectionDialog({
+    resident,
+    open,
+    onClose,
+}: {
+    resident: Props['resident'];
+    open: boolean;
+    onClose: () => void;
+}) {
+    const form = useForm({
+        first_name: resident.first_name,
+        middle_name: resident.middle_name ?? '',
+        last_name: resident.last_name,
+        suffix: resident.suffix ?? 'none',
+        maiden_name: resident.maiden_name ?? '',
+        birthdate: resident.birthdate,
+        gender: resident.gender,
+    });
+
+    function text(
+        field: 'first_name' | 'middle_name' | 'last_name' | 'maiden_name',
+        label: string,
+    ) {
+        return (
+            <Field
+                id={`correct-${field}`}
+                label={label}
+                error={form.errors[field]}
+            >
+                <Input
+                    id={`correct-${field}`}
+                    value={form.data[field]}
+                    onChange={(event) =>
+                        form.setData(field, event.target.value)
+                    }
+                />
+            </Field>
+        );
+    }
+
+    function submit(event: FormEvent) {
+        event.preventDefault();
+        form.transform((data) => ({
+            ...data,
+            suffix: data.suffix === 'none' ? null : data.suffix,
+        }));
+        form.patch(ResidentManagementController.correct.url(resident.id), {
+            preserveScroll: true,
+            onSuccess: onClose,
+        });
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle className="text-2xl">
+                        Correct registration
+                    </DialogTitle>
+                    <DialogDescription className="text-base">
+                        Fix a mistake in the details. The resident keeps their
+                        ID, QR code and family links, and the change is kept in
+                        their history.
+                    </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={submit} className="grid gap-4">
+                    {text('first_name', 'First name')}
+                    {text('middle_name', 'Middle name')}
+                    {text('last_name', 'Last name')}
+                    <Field
+                        id="correct-suffix"
+                        label="Suffix"
+                        error={form.errors.suffix}
+                    >
+                        <ChoiceSelect
+                            id="correct-suffix"
+                            value={form.data.suffix}
+                            placeholder="None"
+                            values={[
+                                { value: 'none', label: 'None' },
+                                ...SUFFIXES.map((s) => ({
+                                    value: s,
+                                    label: s,
+                                })),
+                            ]}
+                            onChange={(value) => form.setData('suffix', value)}
+                        />
+                    </Field>
+                    {text('maiden_name', 'Maiden name')}
+                    <Field
+                        id="correct-birthdate"
+                        label="Birthdate"
+                        error={form.errors.birthdate}
+                    >
+                        <Input
+                            id="correct-birthdate"
+                            type="date"
+                            max={new Date().toISOString().slice(0, 10)}
+                            value={form.data.birthdate}
+                            onChange={(event) =>
+                                form.setData('birthdate', event.target.value)
+                            }
+                        />
+                    </Field>
+                    <Field
+                        id="correct-gender"
+                        label="Gender"
+                        error={form.errors.gender}
+                    >
+                        <ChoiceSelect
+                            id="correct-gender"
+                            value={form.data.gender}
+                            placeholder="Choose"
+                            values={[
+                                { value: 'Male', label: 'Male' },
+                                { value: 'Female', label: 'Female' },
+                            ]}
+                            onChange={(value) => form.setData('gender', value)}
+                        />
+                    </Field>
+                    <DialogFooter className="gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={onClose}
+                        >
+                            Cancel
+                        </Button>
+                        <Button type="submit" disabled={form.processing}>
+                            <Pencil />
+                            Save correction
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function InputErrorLine({ message }: { message?: string }) {
     return message ? (
         <p className="text-base font-semibold text-red-700">{message}</p>
@@ -459,6 +721,23 @@ export default function ManageResident({
 }: Props) {
     const [marrying, setMarrying] = useState(false);
     const [moving, setMoving] = useState(false);
+    const [correcting, setCorrecting] = useState(false);
+    const [dying, setDying] = useState(false);
+    const isArchived = resident.status === 'Archived';
+
+    function markLiving() {
+        if (
+            window.confirm(
+                `Record ${resident.full_name} as living again? Use this only if the death was entered by mistake.`,
+            )
+        ) {
+            router.post(
+                ResidentManagementController.living.url(resident.id),
+                {},
+                { preserveScroll: true },
+            );
+        }
+    }
 
     return (
         <>
@@ -479,6 +758,9 @@ export default function ManageResident({
                         {resident.is_deceased && (
                             <span className="rounded-md bg-slate-700 px-2 py-0.5 text-sm font-bold text-white">
                                 Deceased
+                                {resident.deceased_at
+                                    ? ` ${formatDate(resident.deceased_at)}`
+                                    : ''}
                             </span>
                         )}
                     </h1>
@@ -511,6 +793,32 @@ export default function ManageResident({
                         <Home />
                         Move to another household
                     </Button>
+                    <Button
+                        variant="outline"
+                        disabled={isArchived}
+                        onClick={() => setCorrecting(true)}
+                    >
+                        <Pencil />
+                        Correct registration
+                    </Button>
+                    {resident.is_deceased ? (
+                        <Button
+                            variant="outline"
+                            disabled={isArchived}
+                            onClick={markLiving}
+                        >
+                            Mark as living again
+                        </Button>
+                    ) : (
+                        <Button
+                            variant="outline"
+                            disabled={isArchived}
+                            onClick={() => setDying(true)}
+                        >
+                            <HeartCrack />
+                            Record a death
+                        </Button>
+                    )}
                 </div>
                 {openEvents.length > 0 && (
                     <p
@@ -577,7 +885,11 @@ export default function ManageResident({
                                     {household.members.length === 0
                                         ? 'No one else'
                                         : household.members
-                                              .map((member) => member.full_name)
+                                              .map((member) =>
+                                                  member.is_deceased
+                                                      ? `${member.full_name} (deceased)`
+                                                      : member.full_name,
+                                              )
                                               .join(', ')}
                                 </p>
                                 <Link
@@ -624,6 +936,18 @@ export default function ManageResident({
                 resident={resident}
                 open={marrying}
                 onClose={() => setMarrying(false)}
+            />
+            <CorrectionDialog
+                key={`correct-${correcting}`}
+                resident={resident}
+                open={correcting}
+                onClose={() => setCorrecting(false)}
+            />
+            <DeceasedDialog
+                resident={resident}
+                household={household}
+                open={dying}
+                onClose={() => setDying(false)}
             />
             <MoveDialog
                 resident={resident}

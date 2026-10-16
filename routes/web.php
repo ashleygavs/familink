@@ -51,6 +51,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('household-options', [ResidentManagementController::class, 'households'])->name('households.options');
         Route::post('residents/{resident}/marriage', [ResidentManagementController::class, 'marriage'])->name('residents.marriage');
         Route::post('residents/{resident}/household', [ResidentManagementController::class, 'household'])->name('residents.household');
+        Route::post('residents/{resident}/deceased', [ResidentManagementController::class, 'deceased'])->name('residents.deceased');
+        Route::post('residents/{resident}/living', [ResidentManagementController::class, 'living'])->name('residents.living');
+        Route::patch('residents/{resident}/correction', [ResidentManagementController::class, 'correct'])->name('residents.correct');
         Route::get('events', [ReliefEventController::class, 'index'])->name('events');
         Route::post('events', [ReliefEventController::class, 'store'])->name('events.store');
         Route::put('events/{event}', [ReliefEventController::class, 'update'])->name('events.update');

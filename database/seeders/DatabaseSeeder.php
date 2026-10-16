@@ -25,24 +25,30 @@ class DatabaseSeeder extends Seeder
 
         $accounts = [
             ['Super Admin', 'superadmin@familink.test', RoleName::SuperAdmin, null],
-            ['Municipal Admin', 'admin@familink.test', RoleName::Admin, null],
+            ['BAC_San Jose Admin', 'bac.sanjose.admin@familink.test', RoleName::Admin, null],
             ['Audit Stakeholder', 'stakeholder@familink.test', RoleName::Stakeholder, null],
-            ['Barangay Encoder', 'encoder@familink.test', RoleName::User, $sanJose->id],
+            ['BAC_San Jose Encoder', 'bac.sanjose.encoder@familink.test', RoleName::User, $sanJose->id],
         ];
 
         foreach ($accounts as [$name, $email, $role, $barangayId]) {
-            User::query()->firstOrNew(['email' => $email])->forceFill([
-                'name' => $name,
-                'password' => 'password',
-                'email_verified_at' => now(),
-                'role_id' => Role::query()->where('name', $role->value)->value('id'),
-                'barangay_id' => $barangayId,
-                'municipality_id' => $role === RoleName::Admin ? $sanJose->municipality_id : null,
-            ])->save();
+            $user = User::query()->firstOrNew(['email' => $email]);
+
+            // An account that already exists is left alone, so a changed name or password is never reset.
+            if (! $user->exists) {
+                $user->forceFill([
+                    'name' => $name,
+                    'password' => 'password',
+                    'email_verified_at' => now(),
+                    'role_id' => Role::query()->where('name', $role->value)->value('id'),
+                    'barangay_id' => $barangayId,
+                    'municipality_id' => $role === RoleName::Admin ? $sanJose->municipality_id : null,
+                ])->save();
+            }
         }
 
-        User::query()->where('email', 'admin@familink.test')->first()
-            ?->managedBarangays()->syncWithoutDetaching(Barangay::query()->where('municipality_id', $sanJose->municipality_id)->pluck('id'));
+        // Each admin handles one barangay: the Bacolor admin handles San Jose.
+        User::query()->where('email', 'bac.sanjose.admin@familink.test')->first()
+            ?->managedBarangays()->syncWithoutDetaching([$sanJose->id]);
 
         $this->seedTestFamily($sanJose);
     }

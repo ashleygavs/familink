@@ -95,7 +95,13 @@ class FindFamilyMatches
         $result['mother'] = $this->mothers($context, $result['father']);
         $result['spouse'] = $this->spouses($context, $result['father'], $result['mother']);
         $result['children'] = $this->children($context);
-        $result['relatives'] = $this->likelyRelatives->handle($context, array_map(fn (array $match): int => $match['resident']->id, [...$result['father'], ...$result['mother']]));
+        $suggestedParents = [...$result['father'], ...$result['mother']];
+        $parentId = fn (array $match): int => $match['resident']->id;
+        $result['relatives'] = $this->likelyRelatives->handle(
+            $context,
+            array_map($parentId, $suggestedParents),
+            array_values(array_map($parentId, array_filter($suggestedParents, fn (array $match): bool => $match['confidence'] === 'high'))),
+        );
 
         return $result;
     }

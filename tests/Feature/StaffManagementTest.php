@@ -44,6 +44,44 @@ it('lets a super admin create an admin for a municipality and several of its bar
         ->and($created->email_verified_at)->not->toBeNull();
 });
 
+it('names admins and encoders from where they work and ignores a typed name', function () {
+    $municipality = Municipality::factory()->create(['name' => 'Bacolor']);
+    $sanJose = Barangay::factory()->create(['municipality_id' => $municipality->id, 'name' => 'San Jose']);
+    $cabalantian = Barangay::factory()->create(['municipality_id' => $municipality->id, 'name' => 'Cabalantian']);
+
+    $this->actingAs($this->superAdmin)->post(route('admin.users.store'), staffPayload([
+        'name' => 'Typed Name', 'email' => 'enc@example.test', 'barangay_id' => $sanJose->id,
+    ]))->assertSessionHasNoErrors();
+    $this->actingAs($this->superAdmin)->post(route('admin.users.store'), staffPayload([
+        'name' => '', 'email' => 'adm@example.test', 'role' => 'admin', 'barangay_id' => null,
+        'municipality_id' => $municipality->id, 'managed_barangay_ids' => [$sanJose->id, $cabalantian->id],
+    ]))->assertSessionHasNoErrors();
+
+    expect(User::query()->where('email', 'enc@example.test')->value('name'))->toBe('BAC_San Jose Encoder')
+        ->and(User::query()->where('email', 'adm@example.test')->value('name'))->toBe('BAC_Cabalantian + San Jose Admin');
+});
+
+it('still needs a typed name for the super admin and stakeholder roles', function (string $role) {
+    $this->actingAs($this->superAdmin)->post(route('admin.users.store'), staffPayload([
+        'name' => '', 'role' => $role, 'barangay_id' => null,
+    ]))->assertSessionHasErrors('name');
+
+    $this->actingAs($this->superAdmin)->post(route('admin.users.store'), staffPayload([
+        'name' => 'Audit Person', 'role' => $role, 'barangay_id' => null,
+    ]))->assertSessionHasNoErrors();
+
+    expect(User::query()->where('email', 'staff@example.test')->value('name'))->toBe('Audit Person');
+})->with(['super_admin', 'stakeholder']);
+
+it('derives a municipality code from its name', function (string $name, string $code) {
+    expect(Municipality::factory()->make(['name' => $name])->code())->toBe($code);
+})->with([
+    'one word' => ['Bacolor', 'BAC'],
+    'two words' => ['San Luis', 'SLU'],
+    'short word' => ['Ba', 'BA'],
+    'three words' => ['Santa Rita Norte', 'SRN'],
+]);
+
 it('rejects an admin handling barangays outside their municipality', function () {
     $this->actingAs($this->superAdmin)->post(route('admin.users.store'), staffPayload([
         'role' => 'admin', 'barangay_id' => null, 'municipality_id' => $this->municipality->id,

@@ -17,8 +17,9 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 
 /**
- * A second municipality, more barangays, staff, families and relief events, so every role can be tried
- * and the rules that keep each area separate can be checked. Safe to run again: nothing is duplicated.
+ * More municipalities and barangays, an admin and an encoder for every barangay, families and relief events, so
+ * every role can be tried and the rules that keep each area separate can be checked. Every admin handles one
+ * barangay. Safe to run again: nothing is duplicated.
  *
  * Run with: php artisan db:seed --class=WalkthroughSeeder
  */
@@ -35,31 +36,62 @@ class WalkthroughSeeder extends Seeder
         $santaCruz = Barangay::query()->updateOrCreate(['name' => 'Santa Cruz'], ['code' => 'SC', 'municipality_id' => $lubao->id]);
         $sanNicolas = Barangay::query()->updateOrCreate(['name' => 'San Nicolas'], ['code' => 'SN', 'municipality_id' => $lubao->id]);
 
+        $mexico = Municipality::query()->firstOrCreate(['name' => 'Mexico', 'province' => 'Pampanga']);
+        $sanJoseMalino = Barangay::query()->updateOrCreate(['name' => 'San Jose Malino'], ['code' => 'SJM', 'municipality_id' => $mexico->id]);
+
+        $sanLuis = Municipality::query()->firstOrCreate(['name' => 'San Luis', 'province' => 'Pampanga']);
+        $staMonica = Barangay::query()->updateOrCreate(['name' => 'Sta. Monica'], ['code' => 'SM', 'municipality_id' => $sanLuis->id]);
+
         $superAdmin = User::query()->where('email', 'superadmin@familink.test')->first()
             ?? $this->account('Super Admin', 'superadmin@familink.test', RoleName::SuperAdmin);
-        $bacolorAdmin = User::query()->where('email', 'admin@familink.test')->firstOrFail();
 
-        $lubaoAdmin = $this->account('Lubao Admin', 'admin2@familink.test', RoleName::Admin, municipality: $lubao);
-        $lubaoAdmin->managedBarangays()->syncWithoutDetaching([$santaCruz->id, $sanNicolas->id]);
+        // One admin and one encoder for every barangay. The Bacolor admin (admin@) handles San Jose and is made
+        // by DatabaseSeeder.
+        $cabalantianAdmin = $this->admin('BAC_Cabalantian Admin', 'bac.cabalantian.admin@familink.test', $bacolor, $cabalantian);
+        $santaCruzAdmin = $this->admin('LUB_Santa Cruz Admin', 'lub.santacruz.admin@familink.test', $lubao, $santaCruz);
+        $sanNicolasAdmin = $this->admin('LUB_San Nicolas Admin', 'lub.sannicolas.admin@familink.test', $lubao, $sanNicolas);
+        $this->admin('MEX_San Jose Malino Admin', 'mex.sanjosemalino.admin@familink.test', $mexico, $sanJoseMalino);
+        $this->admin('SLU_Sta. Monica Admin', 'slu.stamonica.admin@familink.test', $sanLuis, $staMonica);
 
-        $this->account('Santa Cruz Encoder', 'encoder2@familink.test', RoleName::User, $santaCruz);
-        $this->account('Cabalantian Encoder', 'encoder3@familink.test', RoleName::User, $cabalantian);
+        $this->account('BAC_Cabalantian Encoder', 'bac.cabalantian.encoder@familink.test', RoleName::User, $cabalantian);
+        $this->account('LUB_Santa Cruz Encoder', 'lub.santacruz.encoder@familink.test', RoleName::User, $santaCruz);
+        $this->account('LUB_San Nicolas Encoder', 'lub.sannicolas.encoder@familink.test', RoleName::User, $sanNicolas);
+        $this->account('MEX_San Jose Malino Encoder', 'mex.sanjosemalino.encoder@familink.test', RoleName::User, $sanJoseMalino);
+        $this->account('SLU_Sta. Monica Encoder', 'slu.stamonica.encoder@familink.test', RoleName::User, $staMonica);
 
-        $this->bacolorFamilies($cabalantian, $bacolorAdmin);
-        $this->lubaoFamilies($santaCruz, $sanNicolas, $lubaoAdmin);
+        $this->bacolorFamilies($cabalantian, $cabalantianAdmin);
+        $this->lubaoFamilies($santaCruz, $sanNicolas, $santaCruzAdmin, $sanNicolasAdmin);
         $this->events($superAdmin, $bacolor, $lubao);
+    }
+
+    /**
+     * An admin of one municipality who handles a single barangay.
+     */
+    private function admin(string $name, string $email, Municipality $municipality, Barangay $barangay): User
+    {
+        $admin = $this->account($name, $email, RoleName::Admin, municipality: $municipality);
+        $admin->managedBarangays()->syncWithoutDetaching([$barangay->id]);
+
+        return $admin;
     }
 
     private function account(string $name, string $email, RoleName $role, ?Barangay $barangay = null, ?Municipality $municipality = null): User
     {
-        return tap(User::query()->firstOrNew(['email' => $email])->forceFill([
-            'name' => $name,
-            'password' => 'password',
-            'email_verified_at' => now(),
-            'role_id' => Role::query()->where('name', $role->value)->value('id'),
-            'barangay_id' => $barangay?->id,
-            'municipality_id' => $municipality?->id,
-        ]))->save();
+        $user = User::query()->firstOrNew(['email' => $email]);
+
+        // An account that already exists is left alone, so a changed name or password is never reset.
+        if (! $user->exists) {
+            $user->forceFill([
+                'name' => $name,
+                'password' => 'password',
+                'email_verified_at' => now(),
+                'role_id' => Role::query()->where('name', $role->value)->value('id'),
+                'barangay_id' => $barangay?->id,
+                'municipality_id' => $municipality?->id,
+            ])->save();
+        }
+
+        return $user;
     }
 
     private function bacolorFamilies(Barangay $cabalantian, User $approver): void
@@ -80,7 +112,7 @@ class WalkthroughSeeder extends Seeder
         $ramos->update(['head_resident_id' => $teresa->id]);
     }
 
-    private function lubaoFamilies(Barangay $santaCruz, Barangay $sanNicolas, User $approver): void
+    private function lubaoFamilies(Barangay $santaCruz, Barangay $sanNicolas, User $approver, User $sanNicolasApprover): void
     {
         $manalo = $this->household($santaCruz, '8 Sampaguita Street');
         $antonio = $this->person($manalo, $approver, 'Antonio', 'Manalo', 'Male', '1970-01-25', 'Married', 'Head');
@@ -98,10 +130,10 @@ class WalkthroughSeeder extends Seeder
         $dizon->update(['head_resident_id' => $cristina->id]);
 
         $soriano = $this->household($sanNicolas, '5 Narra Road');
-        $ramon = $this->person($soriano, $approver, 'Ramon', 'Soriano', 'Male', '1960-07-07', 'Married', 'Head');
-        $linda = $this->person($soriano, $approver, 'Linda', 'Soriano', 'Female', '1963-02-16', 'Married', 'Spouse', ['spouse_id' => $ramon->id], 'Bautista');
+        $ramon = $this->person($soriano, $sanNicolasApprover, 'Ramon', 'Soriano', 'Male', '1960-07-07', 'Married', 'Head');
+        $linda = $this->person($soriano, $sanNicolasApprover, 'Linda', 'Soriano', 'Female', '1963-02-16', 'Married', 'Spouse', ['spouse_id' => $ramon->id], 'Bautista');
         $ramon->update(['spouse_id' => $linda->id]);
-        $this->person($soriano, $approver, 'Carlo', 'Soriano', 'Male', '1990-05-28', 'Single', 'Child', ['father_id' => $ramon->id, 'mother_id' => $linda->id], 'Bautista');
+        $this->person($soriano, $sanNicolasApprover, 'Carlo', 'Soriano', 'Male', '1990-05-28', 'Single', 'Child', ['father_id' => $ramon->id, 'mother_id' => $linda->id], 'Bautista');
         $soriano->update(['head_resident_id' => $ramon->id]);
     }
 

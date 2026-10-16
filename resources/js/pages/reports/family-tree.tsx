@@ -80,6 +80,192 @@ function generations(
     return level;
 }
 
+type Union = { id: string; parents: [number, number]; children: number[] };
+
+/**
+ * Children with two known parents hang from one junction between those parents, so each child has a single
+ * line and lines from different families do not cross. A child with one known parent is joined to them directly.
+ */
+function unions(edges: TreeEdge[]): { unions: Union[]; single: TreeEdge[] } {
+    const parentsOf = new Map<number, number[]>();
+
+    for (const edge of edges) {
+        if (edge.kind === 'parent') {
+            parentsOf.set(edge.to, [
+                ...(parentsOf.get(edge.to) ?? []),
+                edge.from,
+            ]);
+        }
+    }
+
+    const byCouple = new Map<string, Union>();
+    const single: TreeEdge[] = [];
+
+    for (const [child, parents] of parentsOf) {
+        if (parents.length < 2) {
+            single.push({ from: parents[0], to: child, kind: 'parent' });
+
+            continue;
+        }
+
+        const [a, b] = [...parents].sort((x, y) => x - y);
+        const id = `union-${a}-${b}`;
+        const union = byCouple.get(id) ?? { id, parents: [a, b], children: [] };
+
+        union.children.push(child);
+        byCouple.set(id, union);
+    }
+
+    return { unions: [...byCouple.values()], single };
+}
+
+const BOX_WIDTH = 160;
+const COUPLE_GAP = 80;
+const SIBLING_GAP = 40;
+const ROW_HEIGHT = 150;
+
+type Unit = {
+    people: number[];
+    level: number;
+    parent: Unit | null;
+    children: Unit[];
+    spread: number;
+    width: number;
+};
+
+type Position = { x: number; y: number };
+
+/**
+ * Places everyone on a grid. A couple sits side by side with their junction between them, their children are
+ * centred underneath, and each family takes only the width it needs, so nothing overlaps or crosses.
+ */
+function arrange(
+    tree: Props['tree'],
+    level: Map<number, number>,
+    grouped: ReturnType<typeof unions>,
+): Map<number | string, Position> {
+    const gender = new Map(tree.nodes.map((node) => [node.id, node.gender]));
+    const unitOf = new Map<number, Unit>();
+    const all: Unit[] = [];
+
+    const start = (people: number[]): void => {
+        const unit: Unit = {
+            people,
+            level: Math.max(...people.map((id) => level.get(id) ?? 0)),
+            parent: null,
+            children: [],
+            spread: 0,
+            width: 0,
+        };
+
+        people.forEach((id) => unitOf.set(id, unit));
+        all.push(unit);
+    };
+
+    const couples: [number, number][] = [
+        ...tree.edges
+            .filter((edge) => edge.kind === 'spouse')
+            .map((edge): [number, number] => [edge.from, edge.to]),
+        ...grouped.unions.map((union) => union.parents),
+    ];
+
+    for (const [a, b] of couples) {
+        if (!unitOf.has(a) && !unitOf.has(b)) {
+            start(
+                gender.get(a) === 'Female' && gender.get(b) !== 'Female'
+                    ? [b, a]
+                    : [a, b],
+            );
+        }
+    }
+
+    for (const node of tree.nodes) {
+        if (!unitOf.has(node.id)) {
+            start([node.id]);
+        }
+    }
+
+    const attach = (parentId: number, childId: number): void => {
+        const parent = unitOf.get(parentId);
+        const child = unitOf.get(childId);
+
+        if (!parent || !child || child.parent || child === parent) {
+            return;
+        }
+
+        for (let up: Unit | null = parent; up; up = up.parent) {
+            if (up === child) {
+                return;
+            }
+        }
+
+        child.parent = parent;
+        parent.children.push(child);
+    };
+
+    for (const union of grouped.unions) {
+        union.children.forEach((child) => attach(union.parents[0], child));
+    }
+
+    grouped.single.forEach((edge) => attach(edge.from, edge.to));
+
+    const rowWidth = (unit: Unit): number =>
+        unit.people.length * BOX_WIDTH + (unit.people.length - 1) * COUPLE_GAP;
+
+    const measure = (unit: Unit): number => {
+        unit.spread =
+            unit.children.reduce((sum, child) => sum + measure(child), 0) +
+            Math.max(0, unit.children.length - 1) * SIBLING_GAP;
+        unit.width = Math.max(rowWidth(unit), unit.spread);
+
+        return unit.width;
+    };
+
+    const positions = new Map<number | string, Position>();
+
+    const place = (unit: Unit, left: number): void => {
+        const first =
+            left + unit.width / 2 - rowWidth(unit) / 2 + BOX_WIDTH / 2;
+
+        unit.people.forEach((id, index) =>
+            positions.set(id, {
+                x: first + index * (BOX_WIDTH + COUPLE_GAP),
+                y: (level.get(id) ?? 0) * ROW_HEIGHT,
+            }),
+        );
+
+        let childLeft = left + (unit.width - unit.spread) / 2;
+
+        for (const child of unit.children) {
+            place(child, childLeft);
+            childLeft += child.width + SIBLING_GAP;
+        }
+    };
+
+    let cursor = 0;
+
+    for (const root of all.filter((unit) => unit.parent === null)) {
+        const width = measure(root);
+
+        place(root, cursor);
+        cursor += width + SIBLING_GAP * 2;
+    }
+
+    for (const union of grouped.unions) {
+        const a = positions.get(union.parents[0]);
+        const b = positions.get(union.parents[1]);
+
+        if (a && b) {
+            positions.set(union.id, {
+                x: (a.x + b.x) / 2,
+                y: (a.y + b.y) / 2,
+            });
+        }
+    }
+
+    return positions;
+}
+
 export default function FamilyTree({ household, tree }: Props) {
     const container = useRef<HTMLDivElement>(null);
     const network = useRef<Network | null>(null);
@@ -91,63 +277,111 @@ export default function FamilyTree({ household, tree }: Props) {
             return;
         }
 
-        const level = generations(tree.nodes, tree.edges);
-        const nodes = new DataSet(
-            tree.nodes.map((node) => ({
-                id: node.id,
-                level: level.get(node.id) ?? 0,
-                label: `${node.name}\n${node.birth_year}${node.is_deceased ? ' †' : ''}`,
-                shape: 'box',
-                color: nodeColour(node.gender),
-                borderWidth: node.in_household ? 4 : 1,
-                shapeProperties: {
-                    borderDashes: node.status === 'Listed' ? [6, 4] : false,
-                },
-                font: { size: 16, color: '#0f172a', face: 'sans-serif' },
-                margin: { top: 10, right: 12, bottom: 10, left: 12 },
+        const grouped = unions(tree.edges);
+        const married = new Set(
+            tree.edges
+                .filter((edge) => edge.kind === 'spouse')
+                .map((edge) => `union-${edge.from}-${edge.to}`),
+        );
+        const level = generations(tree.nodes, [
+            ...tree.edges,
+            ...grouped.unions.map((union): TreeEdge => ({
+                from: union.parents[0],
+                to: union.parents[1],
+                kind: 'spouse',
             })),
-        );
-        const edges = new DataSet(
-            tree.edges.map((edge, index) =>
-                edge.kind === 'parent'
-                    ? {
-                          id: index,
-                          from: edge.from,
-                          to: edge.to,
-                          arrows: 'to',
-                          color: { color: '#64748b' },
-                      }
-                    : {
-                          id: index,
-                          from: edge.from,
-                          to: edge.to,
-                          dashes: true,
-                          color: { color: '#be185d' },
-                          smooth: false,
-                      },
-            ),
-        );
+        ]);
+        const position = arrange(tree, level, grouped);
+        const people = tree.nodes.map((node) => ({
+            id: node.id,
+            ...position.get(node.id),
+            label: `${node.name}\n${node.birth_year}${node.is_deceased ? ' †' : ''}`,
+            shape: 'box',
+            widthConstraint: { minimum: BOX_WIDTH, maximum: BOX_WIDTH },
+            color: nodeColour(node.gender),
+            borderWidth: node.in_household ? 4 : 1,
+            shapeProperties: {
+                borderDashes: node.status === 'Listed' ? [6, 4] : false,
+            },
+            font: { size: 16, color: '#0f172a', face: 'sans-serif' },
+            margin: { top: 10, right: 12, bottom: 10, left: 12 },
+        }));
+        const junctions = grouped.unions.map((union) => ({
+            id: union.id,
+            ...position.get(union.id),
+            shape: 'dot',
+            size: 5,
+            fixed: true,
+            color: { background: '#64748b', border: '#64748b' },
+            label: '',
+        }));
+        const nodes = new DataSet([...people, ...junctions]);
+        const down = {
+            enabled: true,
+            type: 'cubicBezier',
+            forceDirection: 'vertical',
+            roundness: 0.5,
+        };
+        const links = [
+            ...grouped.unions.flatMap((union) => {
+                const look = married.has(union.id)
+                    ? { dashes: true, color: { color: '#be185d' } }
+                    : { color: { color: '#64748b' } };
+
+                return [
+                    { from: union.parents[0], to: union.id, ...look },
+                    { from: union.parents[1], to: union.id, ...look },
+                    ...union.children.map((child) => ({
+                        from: union.id,
+                        to: child,
+                        arrows: 'to',
+                        color: { color: '#64748b' },
+                        smooth: down,
+                    })),
+                ];
+            }),
+            ...grouped.single.map((edge) => ({
+                from: edge.from,
+                to: edge.to,
+                arrows: 'to',
+                color: { color: '#64748b' },
+                smooth: down,
+            })),
+            ...tree.edges
+                .filter(
+                    (edge) =>
+                        edge.kind === 'spouse' &&
+                        !grouped.unions.some(
+                            (union) =>
+                                union.parents[0] === edge.from &&
+                                union.parents[1] === edge.to,
+                        ),
+                )
+                .map((edge) => ({
+                    from: edge.from,
+                    to: edge.to,
+                    dashes: true,
+                    color: { color: '#be185d' },
+                })),
+        ].map((link, index) => ({ id: index, smooth: false, ...link }));
+        const edges = new DataSet(links);
 
         const instance = new Network(
             container.current,
             { nodes, edges },
             {
-                layout: {
-                    hierarchical: {
-                        direction: 'UD',
-                        sortMethod: 'directed',
-                        levelSeparation: 130,
-                        nodeSpacing: 270,
-                    },
-                },
                 physics: false,
                 interaction: { hover: true, zoomView: true, dragView: true },
             },
         );
 
-        instance.on('selectNode', (event: { nodes: number[] }) =>
-            setSelectedId(event.nodes[0] ?? null),
-        );
+        instance.once('afterDrawing', () => instance.fit());
+
+        instance.on('selectNode', (event: { nodes: (number | string)[] }) => {
+            const id = event.nodes[0];
+
+            setSelectedId(typeof id === 'number' ? id : null);
+        });
         instance.on('deselectNode', () => setSelectedId(null));
         network.current = instance;
 

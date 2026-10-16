@@ -35,6 +35,7 @@ use Illuminate\Support\Str;
  * @property int|null $mother_id
  * @property ResidentStatus $status
  * @property bool $is_deceased
+ * @property Carbon|null $deceased_at
  * @property int|null $approved_by_user_id
  * @property int|null $listed_by_resident_id
  * @property string|null $first_name_key
@@ -49,7 +50,7 @@ use Illuminate\Support\Str;
     'system_id_no', 'qr_code_hash', 'household_id', 'barangay_id',
     'first_name', 'middle_name', 'last_name', 'suffix', 'maiden_name', 'birthdate', 'birthdate_estimated',
     'gender', 'civil_status', 'household_role',
-    'spouse_id', 'father_id', 'mother_id', 'status', 'is_deceased',
+    'spouse_id', 'father_id', 'mother_id', 'status', 'is_deceased', 'deceased_at',
     'approved_by_user_id', 'listed_by_resident_id',
 ])]
 class Resident extends Model
@@ -93,8 +94,20 @@ class Resident extends Model
             'birthdate' => 'date',
             'birthdate_estimated' => 'boolean',
             'is_deceased' => 'boolean',
+            'deceased_at' => 'date',
             'status' => ResidentStatus::class,
         ];
+    }
+
+    /**
+     * Tidy a typed name: extra spaces are removed, and a name typed all in lower or upper case is title-cased.
+     * A name that already mixes cases, like McKenzie or De la Cruz, is left as typed.
+     */
+    public static function properCase(string $value): string
+    {
+        $value = trim((string) preg_replace('/\s+/', ' ', $value));
+
+        return $value === mb_strtolower($value) || $value === mb_strtoupper($value) ? Str::title($value) : $value;
     }
 
     public function getFullNameAttribute(): string

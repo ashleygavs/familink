@@ -40,6 +40,7 @@ type StaffUser = {
 type MunicipalityOption = {
     id: number;
     name: string;
+    code: string;
     barangays: { id: number; name: string }[];
 };
 
@@ -83,6 +84,42 @@ function placeOf(user: StaffUser): string {
     return 'All barangays';
 }
 
+/**
+ * The name an admin or encoder is given, like "BAC_San Jose Admin". The server builds the same name when
+ * the account is saved; this is only the preview. Null until the place is chosen.
+ */
+function previewName(
+    data: FormData,
+    municipalities: MunicipalityOption[],
+): string | null {
+    if (data.role === 'user') {
+        const municipality = municipalities.find((item) =>
+            item.barangays.some(
+                (barangay) => barangay.id.toString() === data.barangay_id,
+            ),
+        );
+        const barangay = municipality?.barangays.find(
+            (item) => item.id.toString() === data.barangay_id,
+        );
+
+        return municipality && barangay
+            ? `${municipality.code}_${barangay.name} Encoder`
+            : null;
+    }
+
+    const municipality = municipalities.find(
+        (item) => item.id.toString() === data.municipality_id,
+    );
+    const names = (municipality?.barangays ?? [])
+        .filter((barangay) => data.managed_barangay_ids.includes(barangay.id))
+        .map((barangay) => barangay.name)
+        .sort((a, b) => a.localeCompare(b));
+
+    return municipality && names.length > 0
+        ? `${municipality.code}_${names.join(' + ')} Admin`
+        : null;
+}
+
 function StaffForm({
     editing,
     municipalities,
@@ -119,6 +156,10 @@ function StaffForm({
             label: `${barangay.name} (${municipality.name})`,
         })),
     );
+    const nameIsAutomatic = data.role === 'admin' || data.role === 'user';
+    const automaticName = nameIsAutomatic
+        ? previewName(data, municipalities)
+        : null;
     const chosenMunicipality = municipalities.find(
         (municipality) => municipality.id.toString() === data.municipality_id,
     );
@@ -149,13 +190,29 @@ function StaffForm({
 
     return (
         <form onSubmit={submit} className="grid gap-4">
-            <Field id="staff-name" label="Full name" error={errors.name}>
-                <Input
-                    id="staff-name"
-                    value={data.name}
-                    onChange={(event) => setData('name', event.target.value)}
-                />
-            </Field>
+            {nameIsAutomatic ? (
+                <div className="grid gap-1 rounded-xl border-2 border-blue-200 bg-sky-50 p-3 dark:border-sidebar-border dark:bg-sidebar">
+                    <span className="text-base font-semibold">
+                        Account name
+                    </span>
+                    <span className="text-xl font-bold">
+                        {automaticName ?? 'Choose the barangay below first'}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                        Made from the municipality, barangay and role.
+                    </span>
+                </div>
+            ) : (
+                <Field id="staff-name" label="Full name" error={errors.name}>
+                    <Input
+                        id="staff-name"
+                        value={data.name}
+                        onChange={(event) =>
+                            setData('name', event.target.value)
+                        }
+                    />
+                </Field>
+            )}
             <Field id="staff-email" label="Email" error={errors.email}>
                 <Input
                     id="staff-email"

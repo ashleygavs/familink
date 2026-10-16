@@ -29,12 +29,26 @@ type ResidentRow = {
     household_id: number | null;
     household_code: string | null;
     barangay_name: string | null;
+    municipality_name: string | null;
     is_deceased: boolean;
+};
+
+type Filters = {
+    q: string;
+    status: string;
+    municipality: number | null;
+    barangay: number | null;
 };
 
 type Props = {
     residents: Paginated<ResidentRow>;
-    filters: { q: string; status: string };
+    filters: Filters;
+    /** Municipalities and barangays the viewer may filter by. */
+    places: {
+        id: number;
+        name: string;
+        barangays: { id: number; name: string }[];
+    }[];
 };
 
 const statusChoices = [
@@ -43,15 +57,39 @@ const statusChoices = [
     { value: 'all', label: 'Everyone registered' },
 ];
 
-export default function Residents({ residents, filters }: Props) {
+export default function Residents({ residents, filters, places }: Props) {
     const { auth } = usePage().props;
     // Only admins can change a resident's marriage or household after approval.
     const canManage =
         auth.role_name === 'admin' || auth.role_name === 'super_admin';
     const [search, setSearch] = useState(filters.q);
 
-    function apply(next: Partial<Props['filters']>) {
-        const merged = { q: search, status: filters.status, ...next };
+    // The filters only appear for people who work in more than one barangay, like a super admin.
+    const barangayCount = places.reduce(
+        (sum, place) => sum + place.barangays.length,
+        0,
+    );
+    const barangayChoices = (
+        filters.municipality === null
+            ? places.flatMap((place) =>
+                  place.barangays.map((barangay) => ({
+                      value: String(barangay.id),
+                      label:
+                          places.length > 1
+                              ? `${place.name}: ${barangay.name}`
+                              : barangay.name,
+                  })),
+              )
+            : (places
+                  .find((place) => place.id === filters.municipality)
+                  ?.barangays.map((barangay) => ({
+                      value: String(barangay.id),
+                      label: barangay.name,
+                  })) ?? [])
+    ).sort((a, b) => a.label.localeCompare(b.label));
+
+    function apply(next: Partial<Filters>) {
+        const merged = { ...filters, q: search, ...next };
 
         router.get(
             residentsRoute().url,
@@ -59,6 +97,8 @@ export default function Residents({ residents, filters }: Props) {
                 q: merged.q === '' ? undefined : merged.q,
                 status:
                     merged.status === 'Approved' ? undefined : merged.status,
+                municipality: merged.municipality ?? undefined,
+                barangay: merged.barangay ?? undefined,
             },
             { preserveState: true, preserveScroll: true, replace: true },
         );
@@ -109,6 +149,71 @@ export default function Residents({ residents, filters }: Props) {
                         <Search />
                         Search
                     </Button>
+                    {barangayCount > 1 && (
+                        <div className="grid gap-3 sm:col-span-3 sm:grid-cols-2">
+                            {places.length > 1 && (
+                                <Field
+                                    id="resident-municipality"
+                                    label="Municipality"
+                                >
+                                    <ChoiceSelect
+                                        id="resident-municipality"
+                                        value={
+                                            filters.municipality === null
+                                                ? 'all'
+                                                : String(filters.municipality)
+                                        }
+                                        placeholder="All municipalities"
+                                        values={[
+                                            {
+                                                value: 'all',
+                                                label: 'All municipalities',
+                                            },
+                                            ...places.map((place) => ({
+                                                value: String(place.id),
+                                                label: place.name,
+                                            })),
+                                        ]}
+                                        onChange={(value) =>
+                                            apply({
+                                                municipality:
+                                                    value === 'all'
+                                                        ? null
+                                                        : Number(value),
+                                                barangay: null,
+                                            })
+                                        }
+                                    />
+                                </Field>
+                            )}
+                            <Field id="resident-barangay" label="Barangay">
+                                <ChoiceSelect
+                                    id="resident-barangay"
+                                    value={
+                                        filters.barangay === null
+                                            ? 'all'
+                                            : String(filters.barangay)
+                                    }
+                                    placeholder="All barangays"
+                                    values={[
+                                        {
+                                            value: 'all',
+                                            label: 'All barangays',
+                                        },
+                                        ...barangayChoices,
+                                    ]}
+                                    onChange={(value) =>
+                                        apply({
+                                            barangay:
+                                                value === 'all'
+                                                    ? null
+                                                    : Number(value),
+                                        })
+                                    }
+                                />
+                            </Field>
+                        </div>
+                    )}
                 </form>
 
                 {residents.data.length === 0 ? (
@@ -139,7 +244,7 @@ export default function Residents({ residents, filters }: Props) {
                                     <span className="text-base text-muted-foreground">
                                         ID {resident.system_id_no}
                                         {resident.barangay_name
-                                            ? ` · Barangay ${resident.barangay_name}`
+                                            ? ` · Barangay ${resident.barangay_name}${resident.municipality_name ? `, ${resident.municipality_name}` : ''}`
                                             : ''}
                                     </span>
                                     {resident.household_code && (

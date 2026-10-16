@@ -4,6 +4,7 @@ use App\Enums\ResidentStatus;
 use App\Enums\RoleName;
 use App\Models\Barangay;
 use App\Models\Household;
+use App\Models\Municipality;
 use App\Models\Resident;
 use App\Models\User;
 
@@ -109,4 +110,48 @@ it('keeps the residents list to encoders and admins', function () {
     }
 
     $this->actingAs(User::factory()->withRole(RoleName::Stakeholder)->create())->get(route('residents.index'))->assertForbidden();
+});
+
+it('lets a super admin narrow the residents list to one municipality or barangay', function () {
+    $superAdmin = User::factory()->withRole(RoleName::SuperAdmin)->create();
+    $lubao = Municipality::factory()->create(['name' => 'Lubao']);
+    $santaCruz = Barangay::factory()->create(['municipality_id' => $lubao->id, 'name' => 'Santa Cruz']);
+    $sanNicolas = Barangay::factory()->create(['municipality_id' => $lubao->id, 'name' => 'San Nicolas']);
+    $inHome = fn (Barangay $barangay, string $first) => Resident::factory()->create([
+        'first_name' => $first, 'barangay_id' => $barangay->id, 'household_id' => Household::factory()->create(['barangay_id' => $barangay->id])->id,
+    ]);
+    ($this->make)(['first_name' => 'Zqbacolor']);
+    $inHome($santaCruz, 'Zqcruz');
+    $inHome($sanNicolas, 'Zqnicolas');
+
+    $names = function (array $query) use ($superAdmin): array {
+        $found = [];
+        test()->actingAs($superAdmin)->get(route('residents.index', ['q' => 'Zq', ...$query]))->assertOk()
+            ->assertInertia(function ($page) use (&$found): void {
+                $found = collect($page->toArray()['props']['residents']['data'])->pluck('full_name')->map(fn ($name) => explode(' ', $name)[0])->sort()->values()->all();
+            });
+
+        return $found;
+    };
+
+    expect($names([]))->toBe(['Zqbacolor', 'Zqcruz', 'Zqnicolas'])
+        ->and($names(['municipality' => $lubao->id]))->toBe(['Zqcruz', 'Zqnicolas'])
+        ->and($names(['municipality' => $this->barangay->municipality_id]))->toBe(['Zqbacolor'])
+        ->and($names(['barangay' => $santaCruz->id]))->toBe(['Zqcruz'])
+        ->and($names(['municipality' => $lubao->id, 'barangay' => $sanNicolas->id]))->toBe(['Zqnicolas']);
+
+    $this->actingAs($superAdmin)->get(route('residents.index', ['municipality' => $lubao->id, 'barangay' => $santaCruz->id]))->assertInertia(
+        fn ($page) => $page->where('filters.municipality', $lubao->id)->where('filters.barangay', $santaCruz->id)->has('places', 2)
+            ->where('residents.data.0.municipality_name', 'Lubao'),
+    );
+});
+
+it('only offers an admin the places they handle and refuses a barangay outside them', function () {
+    $other = Barangay::factory()->create();
+
+    $this->actingAs($this->admin)->get(route('residents.index'))
+        ->assertInertia(fn ($page) => $page->has('places', 1)->has('places.0.barangays', 1)->where('places.0.barangays.0.id', $this->barangay->id));
+
+    $this->actingAs($this->admin)->get(route('residents.index', ['barangay' => $other->id]))->assertSessionHasErrors('barangay');
+    $this->actingAs($this->admin)->get(route('residents.index', ['municipality' => $other->municipality_id]))->assertSessionHasErrors('municipality');
 });

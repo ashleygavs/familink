@@ -2,17 +2,23 @@
 
 Tick each box as you go. Write down anything that does not match the "Expected" result, with the page and what you did.
 
-All test accounts use the password `password`. Open the app at **http://localhost:8000**.
+All test accounts use the password `password` (unless you changed one). Open the app at **http://localhost:8000**.
+
+Every barangay has **one admin and one encoder**, and every admin handles **one barangay**. Account names follow `<municipality code>_<barangay> <role>`, for example `BAC_San Jose Admin` (BAC Bacolor, LUB Lubao, MEX Mexico, SLU San Luis).
+
+| Municipality | Barangay | Admin | Encoder |
+|---|---|---|---|
+| Bacolor | San Jose | `bac.sanjose.admin@familink.test` | `bac.sanjose.encoder@familink.test` |
+| Bacolor | Cabalantian | `bac.cabalantian.admin@familink.test` | `bac.cabalantian.encoder@familink.test` |
+| Lubao | Santa Cruz | `lub.santacruz.admin@familink.test` | `lub.santacruz.encoder@familink.test` |
+| Lubao | San Nicolas | `lub.sannicolas.admin@familink.test` | `lub.sannicolas.encoder@familink.test` |
+| Mexico | San Jose Malino | `mex.sanjosemalino.admin@familink.test` | `mex.sanjosemalino.encoder@familink.test` |
+| San Luis | Sta. Monica | `slu.stamonica.admin@familink.test` | `slu.stamonica.encoder@familink.test` |
 
 | Account | Role | Works in |
 |---|---|---|
 | `superadmin@familink.test` | Super admin | Everything |
-| `admin@familink.test` | Admin (Bacolor) | San Jose and Cabalantian |
-| `admin2@familink.test` | Admin (Lubao) | Santa Cruz and San Nicolas |
 | `stakeholder@familink.test` | Stakeholder | Read-only reports, everywhere |
-| `encoder@familink.test` | Encoder | San Jose only |
-| `encoder3@familink.test` | Encoder | Cabalantian only |
-| `encoder2@familink.test` | Encoder | Santa Cruz only |
 
 Tip: use a different browser (or a private window) for each role, so you stay logged in to several at once.
 
@@ -37,7 +43,7 @@ Relief events
 | Old Relief (closed) | Bacolor | One claim per household | Closed |
 | Lubao Relief Packs | Lubao | One claim per household | Active |
 
-There are no residents waiting for approval right now. Part A creates some.
+Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, households or relief events yet, so they start empty. There are no residents waiting for approval right now. Part A creates some.
 
 ---
 
@@ -51,7 +57,7 @@ There are no residents waiting for approval right now. Part A creates some.
 
 ## A. Encoder
 
-### A1. Encoder, San Jose (`encoder@familink.test`)
+### A1. Encoder, San Jose (`bac.sanjose.encoder@familink.test`)
 
 **Login and menu**
 - [ ] After login you land on **Register Resident**. Expected: the header shows "Barangay San Jose".
@@ -98,26 +104,36 @@ There are no residents waiting for approval right now. Part A creates some.
 - [ ] A Cabalantian card: http://localhost:8000/residents/25/card (Roberto)
 - [ ] A Lubao household sheet: http://localhost:8000/households/9/cards
 
-### A2. Encoder, Cabalantian (`encoder3@familink.test`)
+### A2. Encoder, Cabalantian (`bac.cabalantian.encoder@familink.test`)
 - [ ] Header shows "Barangay Cabalantian". **Residents** lists only Cabalantian people (Villanueva, Ramos), never Dela Cruz.
 - [ ] **Scan QR Code**, "Cash Aid": scan Carmen, Roberto, Elena (`FL-2026-CAB-00001` to `-00003`). Expected: all green.
 - [ ] Scan Miguel (`FL-2026-CAB-00004`), the 4th person in that household. Expected: red, "already used all 3 claims allowed". Sofia is `FL-2026-CAB-00005`.
 - [ ] Switch to "Rice Distribution", scan Teresa (`FL-2026-CAB-00006`). Expected: green. Scan Lito (same household). Expected: red, household claimed.
 - [ ] Scan a San Jose ID (`FL-2026-SJ-00003`). Expected: red, "belongs to another barangay".
 
-### A3. Encoder, Lubao (`encoder2@familink.test`)
-- [ ] The scanner lists only "Lubao Relief Packs" and it is selected automatically.
+### A3. Encoder, Santa Cruz (`lub.santacruz.encoder@familink.test`)
+- [ ] Header shows "Barangay Santa Cruz". The scanner lists only "Lubao Relief Packs" and it is selected automatically.
 - [ ] Scan Antonio (`FL-2026-SC-00001`). Expected: green. Scan another Manalo. Expected: red, household claimed.
-- [ ] Scan a Bacolor ID. Expected: red, another municipality.
+- [ ] Scan a Bacolor ID. Expected: red, another municipality. Scan a San Nicolas ID (`FL-2026-SN-00001`). Expected: red, another barangay.
+
+### A4. Encoder, San Nicolas (`lub.sannicolas.encoder@familink.test`)
+- [ ] Header shows "Barangay San Nicolas". **Residents** lists only the Soriano family (Ramon, Linda, Carlo).
+- [ ] The scanner lists "Lubao Relief Packs". Scan Ramon (`FL-2026-SN-00001`). Expected: green. Scan Linda. Expected: red, household claimed.
+- [ ] Scan Antonio (Santa Cruz, `FL-2026-SC-00001`). Expected: red, another barangay.
+
+### A5. Encoders, Mexico and San Luis (`mex.sanjosemalino.encoder@familink.test`, `slu.stamonica.encoder@familink.test`)
+- [ ] Each header shows its own barangay. **Residents** is empty and the scanner says no relief event is open (there are none for these municipalities yet).
+- [ ] Register a first resident in each barangay. Expected: it works, and the new resident shows as waiting for approval.
+- [ ] Neither encoder can see the other's resident, or any resident of Bacolor or Lubao.
 
 ---
 
 ## B. Admin
 
-### B1. Admin, Bacolor (`admin@familink.test`)
+### B1. Admin, San Jose (`bac.sanjose.admin@familink.test`)
 
 **Login and menu**
-- [ ] After login you land on **Approvals**. The header shows "Bacolor: Cabalantian, San Jose".
+- [ ] After login you land on **Approvals**. The header shows "Bacolor: San Jose".
 - [ ] The menu shows: Dashboard, Residents, Approvals, Relief Events, Suggestion Report, Analytics, Users.
 
 **Approvals**
@@ -128,19 +144,8 @@ There are no residents waiting for approval right now. Part A creates some.
 - [ ] **Archive** another and confirm. Expected: they leave the list.
 - [ ] Open that approved person under **Residents**: the QR card button now exists.
 
-**Changes after approval (marriage and household moves)**
-- [ ] Open **Residents** and click **Update** next to Miguel (Cabalantian). The page shows his family, household and an empty history.
-- [ ] **Record a marriage**: search "Ramos", choose Teresa, and let her take his surname. Expected: both Married and linked, Teresa shown as "Teresa Villanueva", and a history line on each.
-- [ ] Try to marry him to his own sister (Sofia): she is not offered in the search. A child under 16 is not offered either.
-- [ ] While a relief event is open (the two Bacolor events are Active), the **Move to another household** button is greyed out and an amber note names the open events. Expected: no move is possible.
-- [ ] Close both Bacolor events (and the one you created), then **Move to another household**: choose "A household already on record", pick `HH-CAB-0002`, relationship Spouse. Expected: he now lives in `HH-CAB-0002`.
-- [ ] Check the earlier relief claims: they still belong to `HH-CAB-0001`.
-- [ ] Recording a marriage is still allowed while an event is open (only household moves are paused).
-- [ ] Move the head of a household (Roberto): you must choose who becomes the new head.
-- [ ] As an encoder, the **Update** button is not shown, and `/admin/residents/27` is forbidden.
-
 **Relief events**
-- [ ] Open **Relief Events**: the four Bacolor events are shown, and no Lubao event.
+- [ ] Open **Relief Events**: the four Bacolor events are shown, and no Lubao event. Events belong to the whole municipality, so the Bacolor admins share them.
 - [ ] **New event**: create "Test Aid", Per Resident, start today, end next week, status Draft. Expected: it appears as Draft. You do not see a "Most members per household" box (only a super admin does).
 - [ ] **Activate** it. Expected: Active, "Open for scanning".
 - [ ] **Edit** the Active event: only name, end date and status can change. The type and start date are locked.
@@ -151,17 +156,16 @@ There are no residents waiting for approval right now. Part A creates some.
 
 **Suggestion report**
 - [ ] Open **Suggestion Report**: your Yes / No / Not sure answers from A1 are counted.
-- [ ] Change **Time period** and **Place**: the numbers change. A Lubao place is not offered.
+- [ ] Change **Time period**: the numbers change. No **Place** choice is offered, because you handle one barangay.
 
 **Analytics**
-- [ ] Open **Analytics**: only San Jose and Cabalantian rows. Pick an event: the coverage changes.
+- [ ] Open **Analytics**: only a San Jose row. Pick an event: the coverage changes.
 - [ ] Search a household code in **Households**, then open **Family tree**: a tree with parents above and children below, spouses side by side.
-- [ ] Open HH-CAB-0001's tree: three generations (Carmen, then Roberto and Elena, then the children).
 
 **Staff accounts**
-- [ ] Open **Users**: only encoders of your barangays.
-- [ ] **Add account**: an encoder for Cabalantian. Role choices offered: Encoder only.
-- [ ] Try to give that new account a barangay in Lubao. Expected: not offered or refused.
+- [ ] Open **Users**: only the encoder(s) of San Jose.
+- [ ] **Add account**: another encoder for San Jose. Role choices offered: Encoder only, and only San Jose as the barangay.
+- [ ] Try to give that new account a barangay in Cabalantian or Lubao. Expected: not offered or refused.
 - [ ] **Deactivate** an encoder, confirm. Expected: "Inactive" label. In the encoder's browser, the next click logs them out, and logging in again says the account is deactivated.
 - [ ] **Reactivate** them. Expected: they can log in again.
 - [ ] You cannot see or edit admins or super admins here.
@@ -169,14 +173,50 @@ There are no residents waiting for approval right now. Part A creates some.
 **Forbidden for this role**
 - [ ] http://localhost:8000/admin/municipalities
 - [ ] http://localhost:8000/encoder/register and http://localhost:8000/encoder/scanner
+- [ ] A Cabalantian household (same municipality, other admin): http://localhost:8000/family-tree/7 and http://localhost:8000/residents/25/card
 - [ ] A Lubao household: http://localhost:8000/family-tree/9 and http://localhost:8000/households/9/cards
 
-### B2. Admin, Lubao (`admin2@familink.test`)
-- [ ] Header shows "Lubao: San Nicolas, Santa Cruz".
-- [ ] **Approvals**, **Residents**, **Analytics** show only Lubao people. No Villanueva, no Dela Cruz.
-- [ ] **Relief Events** shows only "Lubao Relief Packs".
+### B2. Admin, Cabalantian (`bac.cabalantian.admin@familink.test`)
+- [ ] Header shows "Bacolor: Cabalantian". **Approvals**, **Residents** and **Analytics** show only Cabalantian people (Villanueva, Ramos). No Dela Cruz.
+- [ ] **Relief Events** shows the same four Bacolor events as the San Jose admin.
 - [ ] Open http://localhost:8000/family-tree/1 (San Jose). Expected: forbidden.
-- [ ] Create a new encoder for San Nicolas. Expected: allowed (this barangay had no encoder).
+- [ ] Open HH-CAB-0001's tree: three generations (Carmen, then Roberto and Elena, then the children).
+
+**Changes after approval (marriage and household moves)**
+- [ ] Open **Residents** and click **Update** next to Miguel. The page shows his family, household and an empty history.
+- [ ] **Record a marriage**: search "Ramos", choose Teresa, and let her take his surname. Expected: both Married and linked, Teresa shown as "Teresa Villanueva", and a history line on each.
+- [ ] Try to marry him to his own sister (Sofia): she is not offered in the search. A child under 16 is not offered either.
+- [ ] While a relief event is open (the two Bacolor events are Active), the **Move to another household** button is greyed out and an amber note names the open events. Expected: no move is possible.
+- [ ] Close both Bacolor events (and any you created), then **Move to another household**: choose "A household already on record", pick `HH-CAB-0002`, relationship Spouse. Expected: he now lives in `HH-CAB-0002`.
+- [ ] Check the earlier relief claims: they still belong to `HH-CAB-0001`.
+- [ ] Recording a marriage is still allowed while an event is open (only household moves are paused).
+- [ ] Move the head of a household (Roberto): you must choose who becomes the new head.
+- [ ] As an encoder, the **Update** button is not shown, and `/admin/residents/27` is forbidden.
+
+**Deaths and corrections**
+- [ ] On a resident page, **Correct registration**: fix a misspelt first name and change the birthdate. Expected: the page updates and the history lists what changed, from and to. Saving with nothing changed, or a birthdate that makes a recorded parent less than 15 years older, is refused.
+- [ ] **Record a death** for a married resident (date optional). Expected: a Deceased badge, the spouse becomes Widowed with a history line, and the scanner refuses their QR code. Their past relief claims stay.
+- [ ] Record the death of a household head: you must choose a living member as the new head.
+- [ ] **Mark as living again** on that resident. Expected: the spouse goes back to Married. The head is not restored automatically.
+- [ ] Record a marriage for a widow or widower: the deceased spouse no longer blocks it.
+- [ ] Dashboard and analytics counts no longer include the deceased resident.
+
+### B3. Admin, Santa Cruz (`lub.santacruz.admin@familink.test`)
+- [ ] Header shows "Lubao: Santa Cruz".
+- [ ] **Approvals**, **Residents**, **Analytics** show only Santa Cruz people (the Manalo and Dizon families). No Soriano, no Villanueva, no Dela Cruz.
+- [ ] **Relief Events** shows only "Lubao Relief Packs".
+- [ ] Open http://localhost:8000/family-tree/1 (San Jose) and http://localhost:8000/family-tree/11 (San Nicolas). Expected: both forbidden.
+- [ ] **Users** shows only the Santa Cruz encoder. Adding an encoder offers only Santa Cruz.
+
+### B4. Admin, San Nicolas (`lub.sannicolas.admin@familink.test`)
+- [ ] Header shows "Lubao: San Nicolas". Everything shows only the Soriano family.
+- [ ] Open http://localhost:8000/family-tree/9 (Santa Cruz). Expected: forbidden. **Relief Events** shows "Lubao Relief Packs", shared with the Santa Cruz admin.
+- [ ] Approve the resident registered by the San Nicolas encoder (part A5 style): it works. The Santa Cruz admin cannot see that resident.
+
+### B5. Admins, Mexico and San Luis (`mex.sanjosemalino.admin@familink.test`, `slu.stamonica.admin@familink.test`)
+- [ ] Header shows "Mexico: San Jose Malino" and "San Luis: Sta. Monica". Every list starts empty and **Relief Events** is empty.
+- [ ] After the encoder in part A5 registers a resident, the matching admin sees them under **Approvals** and can approve them. The other admin cannot see them.
+- [ ] Create a relief event for the admin's own municipality. Expected: allowed. The encoder in that barangay then sees it in the scanner, and no one in another municipality does.
 
 ---
 
@@ -206,13 +246,13 @@ There are no residents waiting for approval right now. Part A creates some.
 - [ ] Try to delete **Cabalantian** or **Bacolor**. Expected: refused, they still have residents or barangays.
 
 **Users**
-- [ ] **Add account**: an admin. Choose the Lubao municipality and tick both barangays. Expected: created.
+- [ ] **Add account**: an admin. Choose the Lubao municipality and tick both barangays. Expected: created. (The system lets an admin handle several barangays of one municipality, even though the test accounts now have one each. Delete this account afterwards.)
 - [ ] Try an admin whose barangays are from another municipality than the one chosen. Expected: refused.
 - [ ] Add an encoder with exactly one barangay, and a stakeholder.
 - [ ] **Edit** your own account: the role cannot change.
 - [ ] **Deactivate** yourself: not offered. Deactivate another super admin if there is one.
 - [ ] **Delete** an account you just created with no history: deleted.
-- [ ] Try to delete the admin who approved residents (`admin@familink.test`): the Delete button is hidden, and **Deactivate** is the option.
+- [ ] Try to delete the admin who approved residents (`bac.sanjose.admin@familink.test`): the Delete button is hidden, and **Deactivate** is the option.
 
 **Relief events**
 - [ ] **New event**, Per Resident: a **Most members per household** box appears. Set it to 2.
@@ -274,9 +314,12 @@ Get-Content familink-backup.sql | C:\xampp\mysql\bin\mysql.exe -u root familink
 
 Put the test scenario back (adds anything missing, never duplicates):
 ```powershell
+php artisan db:seed
 php artisan db:seed --class=WalkthroughSeeder
 ```
-This does not reset residents you approved or events you closed. To get the original state again, restore the backup.
+The first command creates the base accounts and the San Jose family. The second creates the other municipalities and barangays, **an admin and an encoder for every barangay** (each admin handles one barangay), the Cabalantian, Santa Cruz and San Nicolas families, and the relief events.
+
+Running them again is safe: nothing is duplicated, an account that already exists is left alone (a changed name or password is **not** reset), and no barangay is taken away from an admin. They do not reset residents you approved or events you closed. To get the original state again, restore the backup.
 
 ## Phone setup for camera scanning (Android, USB, works offline)
 

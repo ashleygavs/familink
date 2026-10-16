@@ -89,7 +89,7 @@ class RecordMarriage
                 $fail("{$person->full_name} must be an approved, living resident.");
             }
 
-            if ($person->spouse_id !== null) {
+            if ($person->spouse_id !== null && ! $person->spouse?->is_deceased) {
                 $fail("{$person->full_name} already has a spouse on record.");
             }
 

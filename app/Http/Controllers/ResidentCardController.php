@@ -18,6 +18,10 @@ class ResidentCardController extends Controller
     {
         abort_unless(Resident::query()->visibleTo($request->user())->whereKey($resident->id)->exists(), 403);
 
+        if ($resident->is_deceased) {
+            return $this->page("QR card for {$resident->full_name}", [], "{$resident->full_name} is recorded as deceased, so there is no QR card to print.");
+        }
+
         if ($resident->status !== ResidentStatus::Approved) {
             return $this->page("QR card for {$resident->full_name}", [], "{$resident->full_name} is not approved yet, so there is no QR card to print.");
         }

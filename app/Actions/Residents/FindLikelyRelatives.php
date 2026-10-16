@@ -32,10 +32,15 @@ class FindLikelyRelatives
     /**
      * @param  array<string, mixed>  $context  The matching context built by FindFamilyMatches.
      * @param  list<int>  $parentIds  Residents already suggested as the person's father or mother.
+     * @param  list<int>|null  $trustedParentIds  The strongly suggested ones among them. Only these make someone a
+     *                                            brother or sister through "the same parent". A weak parent guess
+     *                                            must not pull its own children in as strong siblings. Defaults to
+     *                                            all of $parentIds.
      * @return list<Relative>
      */
-    public function handle(array $context, array $parentIds): array
+    public function handle(array $context, array $parentIds, ?array $trustedParentIds = null): array
     {
+        $trustedParentIds ??= $parentIds;
         $keys = ['paternal' => $context['parent_surname'], 'middle' => $context['middle']];
 
         if ($keys['paternal'] === null && $keys['middle'] === null && $context['household_id'] === null) {
@@ -46,7 +51,7 @@ class FindLikelyRelatives
 
         foreach ($this->pool($context, $parentIds, $keys) as $candidate) {
             $gap = (int) $candidate->birthdate->diffInYears($context['birth'], false);
-            $signals = $this->signals($candidate, $keys, $context, $parentIds);
+            $signals = $this->signals($candidate, $keys, $context, $trustedParentIds);
 
             $isParentSuggestion = in_array($candidate->id, $parentIds, true);
 
@@ -62,6 +67,13 @@ class FindLikelyRelatives
 
                 [$score, $reasons] = $this->score($candidate, $relation, $gap, $signals);
                 $score -= $penalty;
+
+                // Without the same surname, the same household or a shared parent, the only link is a family name
+                // such as the mother's maiden name. Common surnames are shared by unrelated families, so such a
+                // match is never "strong", however well the age and barangay fit.
+                if (! $signals['paternal'] && ! $signals['household'] && ! $signals['shares_parent']) {
+                    $score = min($score, self::HIGH - 1);
+                }
 
                 if ($isParentSuggestion) {
                     $reasons[] = 'Also suggested as a parent above';

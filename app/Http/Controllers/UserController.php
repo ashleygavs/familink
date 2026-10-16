@@ -64,6 +64,7 @@ class UserController extends Controller
                 ->map(fn (Municipality $municipality): array => [
                     'id' => $municipality->id,
                     'name' => $municipality->name,
+                    'code' => $municipality->code(),
                     'barangays' => $municipality->barangays->map(fn (Barangay $barangay): array => ['id' => $barangay->id, 'name' => $barangay->name])->all(),
                 ])->values(),
             'assignableRoles' => $actor->hasRole(RoleName::SuperAdmin) ? RoleName::values() : [RoleName::User->value],
@@ -129,6 +130,30 @@ class UserController extends Controller
     }
 
     /**
+     * The name of an admin or encoder, built from where they work: "BAC_San Jose Admin". Other roles are named by
+     * hand, so this returns null for them.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function staffName(RoleName $role, array $data): ?string
+    {
+        if ($role === RoleName::User) {
+            $barangay = Barangay::query()->with('municipality')->find((int) $data['barangay_id']);
+
+            return $barangay?->municipality === null ? null : "{$barangay->municipality->code()}_{$barangay->name} Encoder";
+        }
+
+        if ($role === RoleName::Admin) {
+            $municipality = Municipality::query()->find((int) $data['municipality_id']);
+            $barangays = Barangay::query()->whereKey($data['managed_barangay_ids'])->orderBy('name')->pluck('name');
+
+            return $municipality === null || $barangays->isEmpty() ? null : "{$municipality->code()}_{$barangays->implode(' + ')} Admin";
+        }
+
+        return null;
+    }
+
+    /**
      * Save the account with the place it works in: an admin gets a municipality and the barangays they
      * handle, an encoder gets exactly one barangay.
      */
@@ -139,7 +164,7 @@ class UserController extends Controller
 
         DB::transaction(function () use ($user, $data, $role): void {
             $user->forceFill([
-                'name' => $data['name'],
+                'name' => $this->staffName($role, $data) ?? $data['name'],
                 'email' => $data['email'],
                 'role_id' => Role::query()->where('name', $role->value)->value('id'),
                 'barangay_id' => $role === RoleName::User ? $data['barangay_id'] : null,

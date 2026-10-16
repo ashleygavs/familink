@@ -2,10 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Residents\CorrectResident;
+use App\Actions\Residents\MarkDeceased;
+use App\Actions\Residents\MarkLiving;
 use App\Actions\Residents\MoveHousehold;
 use App\Actions\Residents\RecordMarriage;
 use App\Enums\HouseholdRole;
 use App\Enums\ResidentStatus;
+use App\Http\Requests\CorrectResidentRequest;
+use App\Http\Requests\MarkDeceasedRequest;
 use App\Http\Requests\MoveHouseholdRequest;
 use App\Http\Requests\RecordMarriageRequest;
 use App\Http\Resources\HouseholdOptionResource;
@@ -43,6 +48,12 @@ class ResidentManagementController extends Controller
                 'birthdate' => $resident->birthdate->toDateString(),
                 'barangay_name' => $resident->barangay?->name,
                 'is_deceased' => $resident->is_deceased,
+                'deceased_at' => $resident->deceased_at?->toDateString(),
+                'first_name' => $resident->first_name,
+                'middle_name' => $resident->middle_name,
+                'last_name' => $resident->last_name,
+                'suffix' => $resident->suffix,
+                'maiden_name' => $resident->maiden_name,
                 'is_head' => $household?->head_resident_id === $resident->id,
             ],
             'family' => [
@@ -64,12 +75,12 @@ class ResidentManagementController extends Controller
                     ->whereNot('status', ResidentStatus::Archived->value)
                     ->orderBy('last_name')->orderBy('first_name')
                     ->get()
-                    ->map(fn (Resident $member): array => ['id' => $member->id, 'full_name' => $member->full_name, 'role' => $member->household_role])
+                    ->map(fn (Resident $member): array => ['id' => $member->id, 'full_name' => $member->full_name, 'role' => $member->household_role, 'is_deceased' => $member->is_deceased])
                     ->all(),
             ],
             'openEvents' => $moveHousehold->blockingEvents($resident),
             'canMarry' => $resident->status === ResidentStatus::Approved && ! $resident->is_deceased
-                && $resident->spouse_id === null && $resident->birthdate->age >= 16,
+                && ($resident->spouse_id === null || $resident->spouse?->is_deceased === true) && $resident->birthdate->age >= 16,
             'roleChoices' => array_values(array_map(
                 fn (HouseholdRole $role): string => $role->value,
                 array_filter(HouseholdRole::cases(), fn (HouseholdRole $role): bool => $role !== HouseholdRole::Head),
@@ -102,7 +113,8 @@ class ResidentManagementController extends Controller
             ->whereKeyNot($resident->id)
             ->where('status', ResidentStatus::Approved->value)
             ->where('is_deceased', false)
-            ->whereNull('spouse_id')
+            ->where(fn ($single) => $single->whereNull('spouse_id')
+                ->orWhereHas('spouse', fn ($spouse) => $spouse->where('is_deceased', true)))
             ->where('birthdate', '<=', now()->subYears(16)->toDateString())
             ->when($term !== '', fn ($query) => $query->where(fn ($match) => $match
                 ->whereRaw("concat_ws(' ', first_name, middle_name, last_name, suffix) like ?", [$like])
@@ -160,6 +172,34 @@ class ResidentManagementController extends Controller
         $household = $moveHousehold->handle($request->user(), $resident, $request->validated());
 
         return back()->with('success', "{$resident->full_name} now lives in {$household->household_code}. Relief already claimed stays with the old household.");
+    }
+
+    public function deceased(MarkDeceasedRequest $request, Resident $resident, MarkDeceased $markDeceased): RedirectResponse
+    {
+        $markDeceased->handle(
+            $request->user(),
+            $resident,
+            $request->filled('deceased_at') ? $request->date('deceased_at') : null,
+            $request->filled('new_head_id') ? $request->integer('new_head_id') : null,
+        );
+
+        return back()->with('success', "{$resident->full_name} is recorded as deceased. Relief they already claimed stays on record.");
+    }
+
+    public function living(Request $request, Resident $resident, MarkLiving $markLiving): RedirectResponse
+    {
+        $this->authorizeResident($request, $resident);
+
+        $markLiving->handle($request->user(), $resident);
+
+        return back()->with('success', "{$resident->full_name} is recorded as living again.");
+    }
+
+    public function correct(CorrectResidentRequest $request, Resident $resident, CorrectResident $correctResident): RedirectResponse
+    {
+        $correctResident->handle($request->user(), $resident, $request->validated());
+
+        return back()->with('success', 'The registration was corrected.');
     }
 
     private function authorizeResident(Request $request, Resident $resident): void

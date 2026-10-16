@@ -31,6 +31,14 @@ class ResidentChange extends Model
 
     public const HOUSEHOLD_MOVE = 'household_move';
 
+    public const DECEASED = 'deceased';
+
+    public const LIVING = 'living';
+
+    public const WIDOWED = 'widowed';
+
+    public const CORRECTION = 'correction';
+
     /**
      * @return array<string, string>
      */

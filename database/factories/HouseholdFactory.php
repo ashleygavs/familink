@@ -18,7 +18,7 @@ class HouseholdFactory extends Factory
     {
         return [
             'household_code' => 'HH-'.fake()->unique()->numerify('######'),
-            'barangay_id' => fn () => Barangay::query()->value('id') ?? Barangay::factory()->create()->id,
+            'barangay_id' => fn () => Barangay::query()->orderBy('id')->value('id') ?? Barangay::factory()->create()->id,
             'head_resident_id' => null,
             'street_address' => fake()->streetAddress(),
         ];
