@@ -16,12 +16,32 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $scanned_by_user_id
  * @property string $status
  * @property string|null $remarks
+ * @property string $entry_method
+ * @property bool $claimed_by_representative
+ * @property string|null $representative_name
+ * @property string|null $representative_relationship
+ * @property bool $representative_verified
  */
-#[Fillable(['event_id', 'resident_id', 'household_id', 'scanned_by_user_id', 'status', 'remarks'])]
+#[Fillable([
+    'event_id', 'resident_id', 'household_id', 'scanned_by_user_id', 'status', 'remarks', 'entry_method',
+    'claimed_by_representative', 'representative_name', 'representative_relationship', 'representative_verified',
+])]
 class ReliefLog extends Model
 {
     /** @use HasFactory<ReliefLogFactory> */
     use HasFactory;
+
+    public const QR = 'qr';
+
+    public const MANUAL = 'manual';
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return ['claimed_by_representative' => 'boolean', 'representative_verified' => 'boolean'];
+    }
 
     /**
      * @return BelongsTo<ReliefEvent, $this>

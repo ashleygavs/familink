@@ -193,6 +193,20 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 - [ ] Move the head of a household (Roberto): you must choose who becomes the new head.
 - [ ] As an encoder, the **Update** button is not shown, and `/admin/residents/27` is forbidden.
 
+**Lost cards, representatives and exports**
+- [ ] On Pedro's page (admin), click **Replace QR card**, choose Lost. Expected: a "Replaced QR cards" list appears, the history says the old code no longer works, and **Print QR card** prints the new card.
+- [ ] As an encoder, scan the OLD printed code for that resident: red "reported Lost and replaced". The admin page then shows the old code was scanned once. Typing the resident ID is refused too (lost or stolen only); a Damaged card still allows it.
+- [ ] As an encoder on the scanner, tick **Someone else is collecting**, leave the fields empty and scan: nothing is recorded and you are told what is missing. Fill in a name, a relationship and the confirmation, then scan: the claim is recorded with who collected it. The box clears for the next person.
+- [ ] Have the same person collect for four residents in one event: the fourth result shows an amber warning.
+- [ ] As an admin or stakeholder, open **Analytics** and use **Claims (CSV)** and **Barangay summary (CSV)**. Expected: Excel opens them, claims show who collected, and the coverage matches the page.
+- [ ] As an encoder or admin, open **Distribution List**: people grouped by household with a signature column, claimed people marked. Tick "Only people who have not claimed yet", then **Print** and **Download CSV**.
+
+**Ending a marriage**
+- [ ] On Juan's page (married to Maria), click **End a marriage**, choose Annulled and confirm. Expected: both show Annulled with no spouse, each has a history line, and the children (Pedro) stay linked to both parents.
+- [ ] Both can now be recorded as married to someone else with **Record a marriage**. The button was greyed out while Juan still had a spouse.
+- [ ] If one of them has a maiden name, a checkbox offers to go back to it. Ticking it changes their surname and the history says what it was before.
+- [ ] A spouse who has died is not offered **End a marriage**: that person is widowed instead.
+
 **Deaths and corrections**
 - [ ] On a resident page, **Correct registration**: fix a misspelt first name and change the birthdate. Expected: the page updates and the history lists what changed, from and to. Saving with nothing changed, or a birthdate that makes a recorded parent less than 15 years older, is refused.
 - [ ] **Record a death** for a married resident (date optional). Expected: a Deceased badge, the spouse becomes Widowed with a history line, and the scanner refuses their QR code. Their past relief claims stay.

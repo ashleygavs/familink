@@ -5,6 +5,8 @@ import {
     PackageX,
     QrCode,
     ScanLine,
+    TriangleAlert,
+    UserRound,
     XCircle,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -13,11 +15,12 @@ import ReliefController from '@/actions/App/Http/Controllers/ReliefController';
 import InputError from '@/components/input-error';
 import { ChoiceSelect, Field } from '@/components/registration/field';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { useQrScanner } from '@/hooks/use-qr-scanner';
 import { formatDate } from '@/lib/format';
 import { playTone, submitScan } from '@/lib/scan';
-import type { ScanResult } from '@/lib/scan';
+import type { Representative, ScanResult } from '@/lib/scan';
 import { scanner as scannerRoute } from '@/routes/encoder';
 
 type OpenEvent = {
@@ -69,9 +72,21 @@ function ResultScreen({
                 </div>
             )}
             <p className="max-w-xl text-2xl font-semibold">{result.message}</p>
+            {result.warning && (
+                <p
+                    role="alert"
+                    className="flex max-w-xl items-start gap-2 rounded-xl bg-amber-300 p-4 text-left text-xl font-bold text-amber-950"
+                >
+                    <TriangleAlert className="mt-1 size-6 shrink-0" />
+                    {result.warning}
+                </p>
+            )}
             {result.previous && (
                 <p className="text-xl">
                     Scanned by {result.previous.scanned_by}
+                    {result.previous.collected_by
+                        ? ` · collected by ${result.previous.collected_by}`
+                        : ''}
                 </p>
             )}
             <Button
@@ -87,8 +102,20 @@ function ResultScreen({
     );
 }
 
-export default function QRScanner({ events }: { events: OpenEvent[] }) {
+export default function QRScanner({
+    events,
+    relationships,
+}: {
+    events: OpenEvent[];
+    relationships: string[];
+}) {
     const [eventId, setEventId] = useState(events[0]?.id.toString() ?? '');
+    const [collecting, setCollecting] = useState(false);
+    const [representative, setRepresentative] = useState({
+        name: '',
+        relationship: '',
+        verified: false,
+    });
     const [result, setResult] = useState<ScanResult | null>(null);
     const [seconds, setSeconds] = useState(RESET_SECONDS);
     const [problem, setProblem] = useState<string | null>(null);
@@ -104,6 +131,27 @@ export default function QRScanner({ events }: { events: OpenEvent[] }) {
             return;
         }
 
+        const claimant: Representative | null = collecting
+            ? {
+                  name: representative.name.trim(),
+                  relationship: representative.relationship,
+                  verified: representative.verified,
+              }
+            : null;
+
+        if (
+            claimant !== null &&
+            (claimant.name.length < 3 ||
+                claimant.relationship === '' ||
+                !claimant.verified)
+        ) {
+            setProblem(
+                'Someone else is collecting: enter their name and relationship, and confirm you checked their authorization, before scanning.',
+            );
+
+            return;
+        }
+
         busy.current = true;
         setProblem(null);
 
@@ -112,12 +160,16 @@ export default function QRScanner({ events }: { events: OpenEvent[] }) {
                 ReliefController.scan.url(),
                 event.id,
                 code,
+                claimant,
             );
 
             playTone(outcome.granted);
             setSeconds(RESET_SECONDS);
             setResult(outcome);
             setManualCode('');
+            // The next person starts as themselves, so one person's details are never reused for another.
+            setCollecting(false);
+            setRepresentative({ name: '', relationship: '', verified: false });
             setCounts((current) => ({
                 approved: current.approved + (outcome.granted ? 1 : 0),
                 denied: current.denied + (outcome.granted ? 0 : 1),
@@ -229,6 +281,79 @@ export default function QRScanner({ events }: { events: OpenEvent[] }) {
                                 · until {formatDate(event.end_date)}
                             </p>
                         )}
+
+                        <div className="grid gap-3 rounded-xl border-2 border-slate-200 p-4 dark:border-border">
+                            <label className="flex min-h-12 items-center gap-3 text-lg font-semibold">
+                                <Checkbox
+                                    checked={collecting}
+                                    onCheckedChange={(checked) =>
+                                        setCollecting(checked === true)
+                                    }
+                                />
+                                <UserRound className="size-5 text-blue-600" />
+                                Someone else is collecting for the resident
+                            </label>
+                            {collecting && (
+                                <div className="grid gap-3">
+                                    <Field
+                                        id="rep-name"
+                                        label="Name of the person collecting"
+                                    >
+                                        <Input
+                                            id="rep-name"
+                                            value={representative.name}
+                                            autoComplete="off"
+                                            onChange={(inputEvent) =>
+                                                setRepresentative({
+                                                    ...representative,
+                                                    name: inputEvent.target
+                                                        .value,
+                                                })
+                                            }
+                                        />
+                                    </Field>
+                                    <Field
+                                        id="rep-relationship"
+                                        label="Their relationship to the resident"
+                                    >
+                                        <ChoiceSelect
+                                            id="rep-relationship"
+                                            value={representative.relationship}
+                                            placeholder="Choose"
+                                            values={relationships.map(
+                                                (relationship) => ({
+                                                    value: relationship,
+                                                    label: relationship,
+                                                }),
+                                            )}
+                                            onChange={(relationship) =>
+                                                setRepresentative({
+                                                    ...representative,
+                                                    relationship,
+                                                })
+                                            }
+                                        />
+                                    </Field>
+                                    <label className="flex min-h-12 items-center gap-3 rounded-lg border-2 border-slate-200 px-3 text-base dark:border-border">
+                                        <Checkbox
+                                            checked={representative.verified}
+                                            onCheckedChange={(checked) =>
+                                                setRepresentative({
+                                                    ...representative,
+                                                    verified: checked === true,
+                                                })
+                                            }
+                                        />
+                                        I checked their ID and the
+                                        resident&apos;s authorization letter
+                                    </label>
+                                    <p className="text-base text-muted-foreground">
+                                        This applies to the next scan only. It
+                                        is recorded with the claim.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
 
                         <div className="overflow-hidden rounded-xl border-2 border-blue-200 dark:border-sidebar-border">
                             <div id="qr-reader" className="min-h-64 w-full" />

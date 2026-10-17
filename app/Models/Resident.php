@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CardReplacementReason;
 use App\Enums\ResidentStatus;
 use Database\Factories\ResidentFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -191,6 +192,25 @@ class Resident extends Model
     public function changes(): HasMany
     {
         return $this->hasMany(ResidentChange::class);
+    }
+
+    /**
+     * @return HasMany<RetiredQrCode, $this>
+     */
+    public function retiredQrCodes(): HasMany
+    {
+        return $this->hasMany(RetiredQrCode::class);
+    }
+
+    /**
+     * Whether a card of this resident was reported lost or stolen, so their ID number must not be typed in
+     * place of the new QR code.
+     */
+    public function hasMisplacedCard(): bool
+    {
+        return $this->retiredQrCodes()
+            ->whereIn('reason', array_map(fn (CardReplacementReason $reason): string => $reason->value, array_filter(CardReplacementReason::cases(), fn (CardReplacementReason $reason): bool => $reason->isMisplaced())))
+            ->exists();
     }
 
     /**

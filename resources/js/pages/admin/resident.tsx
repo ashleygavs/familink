@@ -7,11 +7,15 @@ import {
     Home,
     Network,
     Pencil,
+    Printer,
+    QrCode,
     TriangleAlert,
+    Unlink,
     Users,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import ResidentCardController from '@/actions/App/Http/Controllers/ResidentCardController';
 import ResidentManagementController from '@/actions/App/Http/Controllers/ResidentManagementController';
 import { ResidentSummary } from '@/components/parent-selector';
 import { ChoiceSelect, Field } from '@/components/registration/field';
@@ -73,6 +77,19 @@ type Props = {
     /** Relief events that are open right now, which pause household changes. */
     openEvents: string[];
     canMarry: boolean;
+    canReplaceCard: boolean;
+    /** QR codes that were replaced, with how often each was scanned afterwards. */
+    retiredCards: {
+        id: number;
+        reason: string;
+        replaced_at: string | null;
+        replaced_by: string;
+        attempts: number;
+        last_attempt_at: string | null;
+    }[];
+    canEndMarriage: boolean;
+    /** People in this marriage who could go back to their maiden name. */
+    maidenNameChoices: { id: number; full_name: string; maiden_name: string }[];
     roleChoices: string[];
     history: {
         id: number;
@@ -225,6 +242,206 @@ function MarriageDialog({
                         >
                             <HeartHandshake />
                             Record marriage
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function ReplaceCardDialog({
+    resident,
+    open,
+    onClose,
+}: {
+    resident: Props['resident'];
+    open: boolean;
+    onClose: () => void;
+}) {
+    const form = useForm({ reason: '' });
+
+    function submit(event: FormEvent) {
+        event.preventDefault();
+        form.post(ResidentManagementController.replaceCard.url(resident.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                form.reset();
+                onClose();
+            },
+        });
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle className="text-2xl">
+                        Replace the QR card
+                    </DialogTitle>
+                    <DialogDescription className="text-base">
+                        {resident.full_name} gets a new QR code. The old code
+                        stops working immediately and any scan of it is counted.
+                        The resident ID stays the same. Print the new card for
+                        them afterwards.
+                    </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={submit} className="grid gap-4">
+                    <Field
+                        id="card-reason"
+                        label="What happened to the card?"
+                        hint="If it was lost or stolen, the resident ID can no longer be typed in place of the QR code, so nobody can use it by reading the number."
+                        error={form.errors.reason}
+                    >
+                        <ChoiceSelect
+                            id="card-reason"
+                            value={form.data.reason}
+                            placeholder="Choose"
+                            values={['Lost', 'Stolen', 'Damaged'].map(
+                                (reason) => ({ value: reason, label: reason }),
+                            )}
+                            onChange={(value) => form.setData('reason', value)}
+                        />
+                    </Field>
+                    <DialogFooter className="gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={onClose}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            variant="destructive"
+                            disabled={form.processing || !form.data.reason}
+                        >
+                            <QrCode />
+                            Replace card
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function EndMarriageDialog({
+    resident,
+    spouseName,
+    maidenNameChoices,
+    open,
+    onClose,
+}: {
+    resident: Props['resident'];
+    spouseName: string;
+    maidenNameChoices: Props['maidenNameChoices'];
+    open: boolean;
+    onClose: () => void;
+}) {
+    const form = useForm<{
+        civil_status: string;
+        restore_maiden_name_ids: number[];
+    }>({ civil_status: '', restore_maiden_name_ids: [] });
+
+    function toggle(id: number, checked: boolean) {
+        form.setData((current) => ({
+            ...current,
+            restore_maiden_name_ids: checked
+                ? [...current.restore_maiden_name_ids, id]
+                : current.restore_maiden_name_ids.filter((item) => item !== id),
+        }));
+    }
+
+    function submit(event: FormEvent) {
+        event.preventDefault();
+        form.post(ResidentManagementController.endMarriage.url(resident.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                form.reset();
+                onClose();
+            },
+        });
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                    <DialogTitle className="text-2xl">
+                        End a marriage
+                    </DialogTitle>
+                    <DialogDescription className="text-base">
+                        {resident.full_name} and {spouseName} will no longer be
+                        recorded as spouses, and both can marry again. Their
+                        children stay linked to both of them, and their
+                        household does not change.
+                    </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={submit} className="grid gap-4">
+                    <Field
+                        id="end-marriage-status"
+                        label="How did it end?"
+                        hint="Separated: legally separated. Annulled: the marriage was declared void."
+                        error={form.errors.civil_status}
+                    >
+                        <ChoiceSelect
+                            id="end-marriage-status"
+                            value={form.data.civil_status}
+                            placeholder="Choose"
+                            values={[
+                                { value: 'Separated', label: 'Separated' },
+                                { value: 'Annulled', label: 'Annulled' },
+                            ]}
+                            onChange={(value) =>
+                                form.setData('civil_status', value)
+                            }
+                        />
+                    </Field>
+                    {maidenNameChoices.length > 0 && (
+                        <fieldset className="grid gap-2">
+                            <legend className="text-base font-semibold">
+                                Go back to the maiden name
+                            </legend>
+                            {maidenNameChoices.map((person) => (
+                                <label
+                                    key={person.id}
+                                    className="flex min-h-12 items-center gap-3 rounded-lg border-2 border-slate-200 px-3 text-base dark:border-border"
+                                >
+                                    <Checkbox
+                                        checked={form.data.restore_maiden_name_ids.includes(
+                                            person.id,
+                                        )}
+                                        onCheckedChange={(checked) =>
+                                            toggle(person.id, checked === true)
+                                        }
+                                    />
+                                    {person.full_name} uses the surname again:{' '}
+                                    {person.maiden_name}
+                                </label>
+                            ))}
+                            <InputErrorLine
+                                message={form.errors.restore_maiden_name_ids}
+                            />
+                        </fieldset>
+                    )}
+                    <DialogFooter className="gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={onClose}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            variant="destructive"
+                            disabled={
+                                form.processing || !form.data.civil_status
+                            }
+                        >
+                            <Unlink />
+                            End marriage
                         </Button>
                     </DialogFooter>
                 </form>
@@ -716,10 +933,16 @@ export default function ManageResident({
     household,
     openEvents,
     canMarry,
+    canReplaceCard,
+    retiredCards,
+    canEndMarriage,
+    maidenNameChoices,
     roleChoices,
     history,
 }: Props) {
     const [marrying, setMarrying] = useState(false);
+    const [endingMarriage, setEndingMarriage] = useState(false);
+    const [replacingCard, setReplacingCard] = useState(false);
     const [moving, setMoving] = useState(false);
     const [correcting, setCorrecting] = useState(false);
     const [dying, setDying] = useState(false);
@@ -782,6 +1005,15 @@ export default function ManageResident({
                         <HeartHandshake />
                         Record a marriage
                     </Button>
+                    {canEndMarriage && (
+                        <Button
+                            variant="outline"
+                            onClick={() => setEndingMarriage(true)}
+                        >
+                            <Unlink />
+                            End a marriage
+                        </Button>
+                    )}
                     <Button
                         variant="outline"
                         disabled={
@@ -801,6 +1033,27 @@ export default function ManageResident({
                         <Pencil />
                         Correct registration
                     </Button>
+                    {canReplaceCard && (
+                        <>
+                            <Button
+                                variant="outline"
+                                onClick={() => setReplacingCard(true)}
+                            >
+                                <QrCode />
+                                Replace QR card
+                            </Button>
+                            <Button asChild variant="outline">
+                                <a
+                                    href={ResidentCardController.resident.url(
+                                        resident.id,
+                                    )}
+                                >
+                                    <Printer />
+                                    Print QR card
+                                </a>
+                            </Button>
+                        </>
+                    )}
                     {resident.is_deceased ? (
                         <Button
                             variant="outline"
@@ -837,7 +1090,8 @@ export default function ManageResident({
                 {!canMarry && (
                     <p className="text-base text-muted-foreground">
                         A marriage can only be recorded for an approved, living
-                        adult who has no spouse on record.
+                        adult who has no spouse on record. To marry again, end
+                        the current marriage first.
                     </p>
                 )}
 
@@ -906,6 +1160,40 @@ export default function ManageResident({
                     </Card>
                 </div>
 
+                {retiredCards.length > 0 && (
+                    <Card title="Replaced QR cards" icon={QrCode}>
+                        <ul className="grid gap-2">
+                            {retiredCards.map((card) => (
+                                <li
+                                    key={card.id}
+                                    className={`rounded-lg border-2 p-3 ${
+                                        card.attempts > 0
+                                            ? 'border-amber-300 bg-amber-50 text-amber-950'
+                                            : 'border-slate-200 dark:border-border'
+                                    }`}
+                                >
+                                    <p className="font-semibold">
+                                        {card.reason}
+                                        {card.replaced_at
+                                            ? ` · replaced ${formatDate(card.replaced_at)}`
+                                            : ''}{' '}
+                                        by {card.replaced_by}
+                                    </p>
+                                    <p className="text-sm">
+                                        {card.attempts === 0
+                                            ? 'The old code has not been scanned since.'
+                                            : `The old code was scanned ${card.attempts} ${card.attempts === 1 ? 'time' : 'times'} since${
+                                                  card.last_attempt_at
+                                                      ? `, last on ${formatDate(card.last_attempt_at)}`
+                                                      : ''
+                                              }. Each try was refused.`}
+                                    </p>
+                                </li>
+                            ))}
+                        </ul>
+                    </Card>
+                )}
+
                 <Card title="Changes made after approval" icon={History}>
                     {history.length === 0 ? (
                         <p className="text-muted-foreground">No changes yet.</p>
@@ -937,6 +1225,22 @@ export default function ManageResident({
                 open={marrying}
                 onClose={() => setMarrying(false)}
             />
+            <ReplaceCardDialog
+                key={`card-${replacingCard}`}
+                resident={resident}
+                open={replacingCard}
+                onClose={() => setReplacingCard(false)}
+            />
+            {family.spouse && (
+                <EndMarriageDialog
+                    key={`end-${endingMarriage}`}
+                    resident={resident}
+                    spouseName={family.spouse.full_name}
+                    maidenNameChoices={maidenNameChoices}
+                    open={endingMarriage}
+                    onClose={() => setEndingMarriage(false)}
+                />
+            )}
             <CorrectionDialog
                 key={`correct-${correcting}`}
                 resident={resident}

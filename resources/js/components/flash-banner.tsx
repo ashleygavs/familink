@@ -16,7 +16,7 @@ export function FlashBanner() {
     return (
         <div
             role="status"
-            className="mx-4 mt-4 flex items-center gap-3 rounded-xl border-2 border-emerald-300 bg-emerald-50 p-4 text-emerald-900 md:mx-6 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100"
+            className="mx-4 mt-4 flex items-center gap-3 rounded-xl border-2 border-emerald-300 bg-emerald-50 p-4 text-emerald-900 md:mx-6 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-100 print:hidden"
         >
             <CheckCircle2 className="size-8 shrink-0 text-emerald-600" />
             <p className="flex-1 text-lg font-semibold">{message}</p>

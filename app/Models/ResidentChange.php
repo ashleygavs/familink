@@ -37,6 +37,10 @@ class ResidentChange extends Model
 
     public const WIDOWED = 'widowed';
 
+    public const MARRIAGE_ENDED = 'marriage_ended';
+
+    public const CARD_REPLACED = 'card_replaced';
+
     public const CORRECTION = 'correction';
 
     /**

@@ -5,6 +5,7 @@ import {
     Contact,
     LayoutDashboard,
     Lightbulb,
+    ListChecks,
     PackageCheck,
     QrCode,
     UserPlus,
@@ -20,7 +21,7 @@ import {
     users,
 } from '@/routes/admin';
 import { register, scanner } from '@/routes/encoder';
-import { analytics } from '@/routes/reports';
+import { analytics, distributionList } from '@/routes/reports';
 import type { NavItem, RoleName } from '@/types';
 
 export const roleLabels: Record<RoleName, string> = {
@@ -72,6 +73,14 @@ const roleNavItems: RoleNavItem[] = [
         icon: QrCode,
         description: 'Verify a resident and record a relief claim.',
         roles: ['user'],
+    },
+    {
+        title: 'Distribution List',
+        href: distributionList(),
+        icon: ListChecks,
+        description:
+            'Print who can claim in a barangay, with a signature column.',
+        roles: ['user', 'admin'],
     },
     {
         title: 'Approvals',

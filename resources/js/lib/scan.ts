@@ -2,6 +2,8 @@ export type ScanResult = {
     granted: boolean;
     code: string;
     message: string;
+    /** Something the encoder should look at even though the claim was allowed. */
+    warning: string | null;
     resident: {
         full_name: string;
         system_id_no: string;
@@ -12,7 +14,15 @@ export type ScanResult = {
         name: string;
         claimed_at: string;
         scanned_by: string;
+        collected_by: string | null;
     } | null;
+};
+
+/** Someone other than the resident collecting the relief, with the authorization they showed. */
+export type Representative = {
+    name: string;
+    relationship: string;
+    verified: boolean;
 };
 
 const csrfToken = () => {
@@ -31,6 +41,7 @@ export async function submitScan(
     url: string,
     eventId: number,
     code: string,
+    representative: Representative | null = null,
 ): Promise<ScanResult> {
     const response = await fetch(url, {
         method: 'POST',
@@ -41,14 +52,34 @@ export async function submitScan(
             'X-XSRF-TOKEN': csrfToken(),
         },
         credentials: 'same-origin',
-        body: JSON.stringify({ event_id: eventId, code }),
+        body: JSON.stringify({
+            event_id: eventId,
+            code,
+            ...(representative === null
+                ? {}
+                : {
+                      representative: true,
+                      representative_name: representative.name,
+                      representative_relationship: representative.relationship,
+                      representative_verified: representative.verified,
+                  }),
+        }),
     });
 
     if (!response.ok) {
+        if (response.status === 422) {
+            const body = (await response.json().catch(() => null)) as {
+                errors?: Record<string, string[]>;
+            } | null;
+            const first = Object.values(body?.errors ?? {})[0]?.[0];
+
+            throw new Error(
+                first ?? 'This event cannot be scanned. Choose another event.',
+            );
+        }
+
         throw new Error(
-            response.status === 422
-                ? 'This event cannot be scanned. Choose another event.'
-                : 'Could not reach the server. Check the connection and try again.',
+            'Could not reach the server. Check the connection and try again.',
         );
     }
 

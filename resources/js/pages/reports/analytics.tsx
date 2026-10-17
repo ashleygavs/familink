@@ -4,6 +4,8 @@ import {
     CheckCircle2,
     ChevronLeft,
     ChevronRight,
+    Download,
+    ListChecks,
     MapPin,
     Network,
     Search,
@@ -22,7 +24,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { formatDate } from '@/lib/format';
 import { familyTree } from '@/routes';
-import { analytics } from '@/routes/reports';
+import {
+    analytics,
+    claimsCsv,
+    coverageCsv,
+    distributionList,
+} from '@/routes/reports';
 import type { Paginated } from '@/types';
 
 type EventOption = {
@@ -72,6 +79,8 @@ type Props = {
         households_reached: number;
         coverage: number | null;
     };
+    /** Whether the viewer may open the printable distribution list. */
+    canPrintLists: boolean;
     /** Where the chosen event is happening. */
     location: {
         municipality: string | null;
@@ -127,6 +136,7 @@ export default function Analytics({
     filters,
     events,
     totals,
+    canPrintLists,
     location,
     barangays,
     households,
@@ -270,6 +280,39 @@ export default function Analytics({
                         <Stat label="Relief reached" value="-" />
                     )}
                 </div>
+
+                {event && (
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button asChild variant="outline">
+                            <a href={claimsCsv(event.id).url}>
+                                <Download />
+                                Claims (CSV)
+                            </a>
+                        </Button>
+                        <Button asChild variant="outline">
+                            <a href={coverageCsv(event.id).url}>
+                                <Download />
+                                Barangay summary (CSV)
+                            </a>
+                        </Button>
+                        {canPrintLists && (
+                            <Button asChild variant="outline">
+                                <Link
+                                    href={distributionList({
+                                        query: { event: event.id },
+                                    })}
+                                >
+                                    <ListChecks />
+                                    Distribution list
+                                </Link>
+                            </Button>
+                        )}
+                        <span className="text-base text-muted-foreground">
+                            Spreadsheets open in Excel. They only include the
+                            barangays you can see.
+                        </span>
+                    </div>
+                )}
 
                 {event && (
                     <div className="grid gap-2 rounded-xl border-2 border-emerald-300 bg-emerald-50 p-4 text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-50">

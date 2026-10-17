@@ -128,7 +128,7 @@ type Unit = {
     people: number[];
     level: number;
     parent: Unit | null;
-    children: Unit[];
+    children: { unit: Unit; order: number }[];
     spread: number;
     width: number;
 };
@@ -136,8 +136,69 @@ type Unit = {
 type Position = { x: number; y: number };
 
 /**
- * Places everyone on a grid. A couple sits side by side with their junction between them, their children are
- * centred underneath, and each family takes only the width it needs, so nothing overlaps or crosses.
+ * Orders each set of partners so everyone sits next to the people they are paired with. Someone with two
+ * partners, such as a widower who remarried, ends up between them, so no line runs across another person's box.
+ */
+function chains(
+    partners: Map<number, Set<number>>,
+    birth: Map<number, number>,
+): number[][] {
+    const seen = new Set<number>();
+    const result: number[][] = [];
+
+    for (const id of [...partners.keys()].sort((a, b) => a - b)) {
+        if (seen.has(id)) {
+            continue;
+        }
+
+        const component: number[] = [];
+        const stack = [id];
+
+        seen.add(id);
+
+        while (stack.length > 0) {
+            const current = stack.pop() as number;
+
+            component.push(current);
+
+            for (const next of partners.get(current) ?? []) {
+                if (!seen.has(next)) {
+                    seen.add(next);
+                    stack.push(next);
+                }
+            }
+        }
+
+        // Start from an end of the chain (someone with one partner), the oldest first.
+        const ends = component
+            .filter((person) => (partners.get(person)?.size ?? 0) <= 1)
+            .sort((a, b) => (birth.get(a) ?? 0) - (birth.get(b) ?? 0));
+        const ordered: number[] = [];
+        const placed = new Set<number>();
+        const walk = (person: number): void => {
+            placed.add(person);
+            ordered.push(person);
+
+            for (const next of [...(partners.get(person) ?? [])].sort(
+                (a, b) => a - b,
+            )) {
+                if (!placed.has(next)) {
+                    walk(next);
+                }
+            }
+        };
+
+        walk(ends[0] ?? component[0]);
+        result.push(ordered);
+    }
+
+    return result;
+}
+
+/**
+ * Places everyone on a grid. Partners sit side by side in a chain with a junction between each pair, the
+ * children of a pair are centred underneath, and each family takes only the width it needs, so nothing
+ * overlaps and lines do not cross.
  */
 function arrange(
     tree: Props['tree'],
@@ -145,6 +206,7 @@ function arrange(
     grouped: ReturnType<typeof unions>,
 ): Map<number | string, Position> {
     const gender = new Map(tree.nodes.map((node) => [node.id, node.gender]));
+    const birth = new Map(tree.nodes.map((node) => [node.id, node.birth_year]));
     const unitOf = new Map<number, Unit>();
     const all: Unit[] = [];
 
@@ -162,21 +224,24 @@ function arrange(
         all.push(unit);
     };
 
-    const couples: [number, number][] = [
-        ...tree.edges
-            .filter((edge) => edge.kind === 'spouse')
-            .map((edge): [number, number] => [edge.from, edge.to]),
-        ...grouped.unions.map((union) => union.parents),
-    ];
+    const partners = new Map<number, Set<number>>();
+    const pair = (a: number, b: number): void => {
+        partners.set(a, (partners.get(a) ?? new Set<number>()).add(b));
+        partners.set(b, (partners.get(b) ?? new Set<number>()).add(a));
+    };
 
-    for (const [a, b] of couples) {
-        if (!unitOf.has(a) && !unitOf.has(b)) {
-            start(
-                gender.get(a) === 'Female' && gender.get(b) !== 'Female'
-                    ? [b, a]
-                    : [a, b],
-            );
-        }
+    tree.edges
+        .filter((edge) => edge.kind === 'spouse')
+        .forEach((edge) => pair(edge.from, edge.to));
+    grouped.unions.forEach((union) => pair(union.parents[0], union.parents[1]));
+
+    for (const chain of chains(partners, birth)) {
+        const flip =
+            chain.length === 2 &&
+            gender.get(chain[0]) === 'Female' &&
+            gender.get(chain[1]) !== 'Female';
+
+        start(flip ? [chain[1], chain[0]] : chain);
     }
 
     for (const node of tree.nodes) {
@@ -200,21 +265,34 @@ function arrange(
         }
 
         child.parent = parent;
-        parent.children.push(child);
+        parent.children.push({
+            unit: child,
+            order: parent.people.indexOf(parentId),
+        });
     };
 
     for (const union of grouped.unions) {
-        union.children.forEach((child) => attach(union.parents[0], child));
+        const [first, second] = union.parents;
+        const leftmost = Math.min(
+            unitOf.get(first)?.people.indexOf(first) ?? 0,
+            unitOf.get(second)?.people.indexOf(second) ?? 0,
+        );
+        const owner = unitOf.get(first)?.people[leftmost] ?? first;
+
+        union.children.forEach((child) => attach(owner, child));
     }
 
     grouped.single.forEach((edge) => attach(edge.from, edge.to));
+
+    // Children stay in the order of the pair they belong to, left to right along the chain.
+    all.forEach((unit) => unit.children.sort((a, b) => a.order - b.order));
 
     const rowWidth = (unit: Unit): number =>
         unit.people.length * BOX_WIDTH + (unit.people.length - 1) * COUPLE_GAP;
 
     const measure = (unit: Unit): number => {
         unit.spread =
-            unit.children.reduce((sum, child) => sum + measure(child), 0) +
+            unit.children.reduce((sum, child) => sum + measure(child.unit), 0) +
             Math.max(0, unit.children.length - 1) * SIBLING_GAP;
         unit.width = Math.max(rowWidth(unit), unit.spread);
 
@@ -236,7 +314,7 @@ function arrange(
 
         let childLeft = left + (unit.width - unit.spread) / 2;
 
-        for (const child of unit.children) {
+        for (const { unit: child } of unit.children) {
             place(child, childLeft);
             childLeft += child.width + SIBLING_GAP;
         }

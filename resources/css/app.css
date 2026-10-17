@@ -150,7 +150,27 @@
     #print-qr,
     #print-qr *,
     #print-cards,
-    #print-cards * {
+    #print-cards *,
+    #print-list,
+    #print-list * {
         visibility: visible;
+    }
+
+    /* The menu does not print and takes no room, so a sheet starts at the left edge of the paper. */
+    [data-slot='sidebar'] {
+        display: none !important;
+    }
+
+    /* A printed list is black on white whatever the screen theme, so it stays readable on paper. */
+    #print-list,
+    #print-list * {
+        color: #000 !important;
+        background: #fff !important;
+        border-color: #94a3b8 !important;
+        box-shadow: none !important;
+    }
+
+    #print-list [data-print-shade] {
+        background: #f1f5f9 !important;
     }
 }

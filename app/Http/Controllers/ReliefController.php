@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Actions\Relief\ScanRelief;
 use App\Enums\EventStatus;
+use App\Enums\RepresentativeRelationship;
 use App\Http\Requests\ScanReliefRequest;
 use App\Models\ReliefEvent;
 use Illuminate\Http\JsonResponse;
@@ -36,7 +37,10 @@ class ReliefController extends Controller
             ])
             ->values();
 
-        return Inertia::render('encoder/scanner', ['events' => $events]);
+        return Inertia::render('encoder/scanner', [
+            'events' => $events,
+            'relationships' => RepresentativeRelationship::values(),
+        ]);
     }
 
     /**
@@ -47,6 +51,6 @@ class ReliefController extends Controller
     {
         $event = ReliefEvent::query()->findOrFail($request->integer('event_id'));
 
-        return response()->json($scanRelief->handle($request->user(), $event, $request->string('code')->toString()));
+        return response()->json($scanRelief->handle($request->user(), $event, $request->string('code')->toString(), $request->representative()));
     }
 }

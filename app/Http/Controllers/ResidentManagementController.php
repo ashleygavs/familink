@@ -3,21 +3,28 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Residents\CorrectResident;
+use App\Actions\Residents\EndMarriage;
 use App\Actions\Residents\MarkDeceased;
 use App\Actions\Residents\MarkLiving;
 use App\Actions\Residents\MoveHousehold;
 use App\Actions\Residents\RecordMarriage;
+use App\Actions\Residents\ReplaceQrCard;
+use App\Enums\CardReplacementReason;
+use App\Enums\CivilStatus;
 use App\Enums\HouseholdRole;
 use App\Enums\ResidentStatus;
 use App\Http\Requests\CorrectResidentRequest;
+use App\Http\Requests\EndMarriageRequest;
 use App\Http\Requests\MarkDeceasedRequest;
 use App\Http\Requests\MoveHouseholdRequest;
 use App\Http\Requests\RecordMarriageRequest;
+use App\Http\Requests\ReplaceQrCardRequest;
 use App\Http\Resources\HouseholdOptionResource;
 use App\Http\Resources\ResidentOptionResource;
 use App\Models\Household;
 use App\Models\Resident;
 use App\Models\ResidentChange;
+use App\Models\RetiredQrCode;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -30,7 +37,7 @@ class ResidentManagementController extends Controller
      * A resident's family and household, with the changes an admin can make after approval and a history of
      * the ones already made.
      */
-    public function show(Request $request, Resident $resident, MoveHousehold $moveHousehold): Response
+    public function show(Request $request, Resident $resident, MoveHousehold $moveHousehold, EndMarriage $endMarriage): Response
     {
         $this->authorizeResident($request, $resident);
 
@@ -81,6 +88,24 @@ class ResidentManagementController extends Controller
             'openEvents' => $moveHousehold->blockingEvents($resident),
             'canMarry' => $resident->status === ResidentStatus::Approved && ! $resident->is_deceased
                 && ($resident->spouse_id === null || $resident->spouse?->is_deceased === true) && $resident->birthdate->age >= 16,
+            'canReplaceCard' => $resident->status === ResidentStatus::Approved && ! $resident->is_deceased,
+            'retiredCards' => $resident->retiredQrCodes()->with('replacedBy')->latest('id')->get()
+                ->map(fn (RetiredQrCode $card): array => [
+                    'id' => $card->id,
+                    'reason' => $card->reason->value,
+                    'replaced_at' => $card->created_at?->toIso8601String(),
+                    'replaced_by' => $card->replacedBy->name,
+                    'attempts' => $card->attempts,
+                    'last_attempt_at' => $card->last_attempt_at?->toIso8601String(),
+                ])->all(),
+            'canEndMarriage' => $resident->status === ResidentStatus::Approved && ! $resident->is_deceased
+                && $resident->spouse !== null && ! $resident->spouse->is_deceased
+                && Resident::query()->visibleTo($request->user())->whereKey($resident->spouse->id)->exists(),
+            'maidenNameChoices' => collect([$resident, $resident->spouse])
+                ->filter(fn (?Resident $person): bool => $person !== null && $endMarriage->canRestoreMaidenName($person))
+                ->map(fn (Resident $person): array => ['id' => $person->id, 'full_name' => $person->full_name, 'maiden_name' => (string) $person->maiden_name])
+                ->values()
+                ->all(),
             'roleChoices' => array_values(array_map(
                 fn (HouseholdRole $role): string => $role->value,
                 array_filter(HouseholdRole::cases(), fn (HouseholdRole $role): bool => $role !== HouseholdRole::Head),
@@ -165,6 +190,27 @@ class ResidentManagementController extends Controller
         );
 
         return back()->with('success', "{$resident->full_name} and {$spouse->full_name} are now recorded as married.");
+    }
+
+    public function replaceCard(ReplaceQrCardRequest $request, Resident $resident, ReplaceQrCard $replaceQrCard): RedirectResponse
+    {
+        $replaceQrCard->handle($request->user(), $resident, CardReplacementReason::from($request->string('reason')->toString()));
+
+        return back()->with('success', "{$resident->full_name} has a new QR card code. The old one no longer works. Print the new card for them.");
+    }
+
+    public function endMarriage(EndMarriageRequest $request, Resident $resident, EndMarriage $endMarriage): RedirectResponse
+    {
+        $spouseName = $resident->spouse?->full_name;
+
+        $endMarriage->handle(
+            $request->user(),
+            $resident,
+            CivilStatus::from($request->string('civil_status')->toString()),
+            array_values(array_map('intval', (array) $request->input('restore_maiden_name_ids', []))),
+        );
+
+        return back()->with('success', "The marriage of {$resident->full_name} and {$spouseName} was ended. Their children stay linked to both.");
     }
 
     public function household(MoveHouseholdRequest $request, Resident $resident, MoveHousehold $moveHousehold): RedirectResponse

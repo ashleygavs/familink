@@ -9,6 +9,7 @@ use App\Models\Household;
 use App\Models\ReliefEvent;
 use App\Models\ReliefLog;
 use App\Models\Resident;
+use App\Models\RetiredQrCode;
 use App\Models\User;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
@@ -17,23 +18,33 @@ use Illuminate\Support\Facades\DB;
  * Decides whether a scanned code may claim relief and records the claim. A denial is a normal result with a
  * plain reason, not an error.
  *
- * @phpstan-type ScanResult array{granted: bool, code: string, message: string, resident: array<string, string|null>|null, previous: array<string, string>|null}
+ * @phpstan-type ScanResult array{granted: bool, code: string, message: string, warning: string|null, resident: array<string, string|null>|null, previous: array<string, string|null>|null}
+ * @phpstan-type Representative array{name: string, relationship: string, verified: bool}
  */
 class ScanRelief
 {
+    /** After this many earlier claims by the same representative in one event, the next one comes with a warning. */
+    private const REPRESENTATIVE_WARNING_AFTER = 2;
+
     /**
+     * @param  Representative|null  $representative  Set when someone other than the resident collects the relief.
      * @return ScanResult
      */
-    public function handle(User $user, ReliefEvent $event, string $code): array
+    public function handle(User $user, ReliefEvent $event, string $code, ?array $representative = null): array
     {
         if (! $event->isOpenForScanning()) {
             return $this->deny('event_closed', $this->closedMessage($event));
         }
 
-        $resident = $this->find(trim($code));
+        $code = trim($code);
+        [$resident, $method] = $this->find($code);
 
         if ($resident === null) {
-            return $this->deny('unknown_code', 'This code is not registered in FamiLink.');
+            $retired = $this->retired($code);
+
+            return $retired === null
+                ? $this->deny('unknown_code', 'This code is not registered in FamiLink.')
+                : $this->cardReplaced($user, $event, $retired);
         }
 
         if (! $this->inArea($user, $event, $resident)) {
@@ -48,19 +59,52 @@ class ScanRelief
             return $this->deny('not_approved', $this->notApprovedMessage($resident), $resident);
         }
 
-        return $this->claim($user, $event, $resident);
+        if ($method === ReliefLog::MANUAL && $resident->hasMisplacedCard()) {
+            return $this->deny('manual_blocked', "{$resident->full_name} reported a lost or stolen card, so the ID cannot be typed. Scan the new QR card.", $resident);
+        }
+
+        return $this->claim($user, $event, $resident, $method, $representative);
+    }
+
+    /**
+     * A QR code that was replaced. The try is counted, and the encoder is told whose card it was only when the
+     * resident belongs to the area they work in.
+     *
+     * @return ScanResult
+     */
+    private function cardReplaced(User $user, ReliefEvent $event, RetiredQrCode $retired): array
+    {
+        $retired->forceFill(['attempts' => $retired->attempts + 1, 'last_attempt_at' => now()])->save();
+
+        $resident = $retired->resident;
+
+        if (! $this->inArea($user, $event, $resident)) {
+            return $this->deny('card_replaced', 'This QR card is no longer valid.');
+        }
+
+        return $this->deny(
+            'card_replaced',
+            "This QR card was reported {$retired->reason->value} and replaced on {$retired->created_at?->format('M j, Y')}. Ask {$resident->full_name} for the new card.",
+            $resident,
+        );
+    }
+
+    private function retired(string $code): ?RetiredQrCode
+    {
+        return $code === '' ? null : RetiredQrCode::query()->with(['resident.barangay', 'resident.household'])->where('qr_code_hash', $code)->first();
     }
 
     /**
      * Record the claim in a transaction. The household row is locked so two scanners cannot both pass the
      * household check, and the unique index on event and resident backs up the per-person check.
      *
+     * @param  Representative|null  $representative
      * @return ScanResult
      */
-    private function claim(User $user, ReliefEvent $event, Resident $resident): array
+    private function claim(User $user, ReliefEvent $event, Resident $resident, string $method, ?array $representative): array
     {
         try {
-            return DB::transaction(function () use ($user, $event, $resident): array {
+            return DB::transaction(function () use ($user, $event, $resident, $method, $representative): array {
                 Household::query()->whereKey($resident->household_id)->lockForUpdate()->first();
 
                 $existing = ReliefLog::query()
@@ -83,15 +127,35 @@ class ScanRelief
                     return $this->deny('household_limit', "This household already used all {$limit} claims allowed for this event.", $resident);
                 }
 
+                $earlier = $representative === null ? 0 : $this->earlierClaimsBy($event, $representative['name']);
+
                 ReliefLog::query()->create([
                     'event_id' => $event->id,
                     'resident_id' => $resident->id,
                     'household_id' => $resident->household_id,
                     'scanned_by_user_id' => $user->id,
                     'status' => 'Claimed',
+                    'entry_method' => $method,
+                    'claimed_by_representative' => $representative !== null,
+                    'representative_name' => $representative['name'] ?? null,
+                    'representative_relationship' => $representative['relationship'] ?? null,
+                    'representative_verified' => $representative['verified'] ?? false,
                 ]);
 
-                return $this->result(true, 'granted', "{$resident->full_name} may receive relief.", $resident);
+                $result = $this->result(
+                    true,
+                    'granted',
+                    $representative === null
+                        ? "{$resident->full_name} may receive relief."
+                        : "{$resident->full_name} may receive relief. It is collected by {$representative['name']} ({$representative['relationship']}).",
+                    $resident,
+                );
+
+                if ($representative !== null && $earlier >= self::REPRESENTATIVE_WARNING_AFTER) {
+                    $result['warning'] = "{$representative['name']} has already collected for {$earlier} other residents in this event. Check their authorization carefully.";
+                }
+
+                return $result;
             });
         } catch (UniqueConstraintViolationException) {
             $existing = ReliefLog::query()->with(['resident', 'scannedBy'])
@@ -121,24 +185,42 @@ class ScanRelief
             'name' => $who,
             'claimed_at' => $when,
             'scanned_by' => $existing->scannedBy->name ?? '',
+            'collected_by' => $existing->claimed_by_representative ? $existing->representative_name : null,
         ];
 
         return $result;
     }
 
     /**
-     * A QR code, or a typed resident ID for a damaged code.
+     * How many claims this event already has from the same representative, ignoring capitals and spacing.
      */
-    private function find(string $code): ?Resident
+    private function earlierClaimsBy(ReliefEvent $event, string $name): int
+    {
+        return ReliefLog::query()
+            ->where('event_id', $event->id)
+            ->where('claimed_by_representative', true)
+            ->whereRaw('lower(trim(representative_name)) = ?', [mb_strtolower(trim($name))])
+            ->count();
+    }
+
+    /**
+     * The resident behind a QR code, or behind a typed resident ID for a damaged code, and which of the two was used.
+     *
+     * @return array{0: Resident|null, 1: string}
+     */
+    private function find(string $code): array
     {
         if ($code === '') {
-            return null;
+            return [null, ReliefLog::QR];
         }
 
-        return Resident::query()
-            ->with(['barangay', 'household'])
-            ->where(fn ($query) => $query->where('qr_code_hash', $code)->orWhere('system_id_no', strtoupper($code)))
-            ->first();
+        $byQr = Resident::query()->with(['barangay', 'household'])->where('qr_code_hash', $code)->first();
+
+        if ($byQr !== null) {
+            return [$byQr, ReliefLog::QR];
+        }
+
+        return [Resident::query()->with(['barangay', 'household'])->where('system_id_no', strtoupper($code))->first(), ReliefLog::MANUAL];
     }
 
     private function inArea(User $user, ReliefEvent $event, Resident $resident): bool
@@ -182,6 +264,7 @@ class ScanRelief
             'granted' => $granted,
             'code' => $code,
             'message' => $message,
+            'warning' => null,
             'resident' => $resident === null ? null : [
                 'full_name' => $resident->full_name,
                 'system_id_no' => $resident->system_id_no,
