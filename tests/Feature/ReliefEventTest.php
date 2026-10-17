@@ -5,6 +5,7 @@ use App\Enums\RoleName;
 use App\Models\Barangay;
 use App\Models\Municipality;
 use App\Models\ReliefEvent;
+use App\Models\ReliefEventChange;
 use App\Models\ReliefLog;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -139,9 +140,9 @@ it('ignores the limit on a per household event', function () {
     expect(ReliefEvent::query()->latest('id')->first())->max_claims_per_household->toBeNull()->claimLimitPerHousehold()->toBe(1);
 });
 
-it('lets a super admin change the limit of an active event while an admin cannot', function () {
-    $event = ReliefEvent::factory()->perResident(2)->create(['municipality_id' => $this->municipality->id]);
-    $payload = eventPayload(['title' => $event->title, 'allocation_type' => 'Per Resident', 'status' => 'Active', 'max_claims_per_household' => 5]);
+it('lets a super admin change the limit of a draft while an admin cannot', function () {
+    $event = ReliefEvent::factory()->perResident(2)->draft()->create(['municipality_id' => $this->municipality->id]);
+    $payload = eventPayload(['title' => $event->title, 'allocation_type' => 'Per Resident', 'status' => 'Draft', 'max_claims_per_household' => 5]);
 
     $this->actingAs($this->admin)->put(route('admin.events.update', $event), $payload)->assertSessionHasNoErrors();
     expect($event->fresh()->max_claims_per_household)->toBe(2);
@@ -151,6 +152,90 @@ it('lets a super admin change the limit of an active event while an admin cannot
 
     $this->actingAs($this->superAdmin)->put(route('admin.events.update', $event), [...$payload, 'max_claims_per_household' => ''])->assertSessionHasNoErrors();
     expect($event->fresh()->max_claims_per_household)->toBeNull();
+});
+
+it('locks the limit once the event is active, for everyone', function () {
+    $event = ReliefEvent::factory()->perResident(2)->create(['municipality_id' => $this->municipality->id]);
+    $payload = eventPayload(['title' => $event->title, 'allocation_type' => 'Per Resident', 'status' => 'Active']);
+
+    $this->actingAs($this->superAdmin)->put(route('admin.events.update', $event), [...$payload, 'max_claims_per_household' => 9])
+        ->assertSessionHasErrors('max_claims_per_household');
+    $this->actingAs($this->superAdmin)->put(route('admin.events.update', $event), [...$payload, 'max_claims_per_household' => ''])
+        ->assertSessionHasErrors('max_claims_per_household');
+    $this->actingAs($this->admin)->put(route('admin.events.update', $event), [...$payload, 'max_claims_per_household' => 9])
+        ->assertSessionHasNoErrors();
+
+    expect($event->fresh()->max_claims_per_household)->toBe(2);
+
+    // Saving the same limit, as closing an event does, is not a change.
+    $this->actingAs($this->superAdmin)->put(route('admin.events.update', $event), [...$payload, 'status' => 'Closed', 'max_claims_per_household' => 2])
+        ->assertSessionHasNoErrors();
+    expect($event->fresh()->status)->toBe(EventStatus::Closed);
+});
+
+it('can still set the limit in the same save that activates a draft', function () {
+    $event = ReliefEvent::factory()->draft()->create(['municipality_id' => $this->municipality->id, 'allocation_type' => 'Per Resident']);
+
+    $this->actingAs($this->superAdmin)->put(route('admin.events.update', $event), eventPayload([
+        'title' => $event->title, 'allocation_type' => 'Per Resident', 'status' => 'Active', 'max_claims_per_household' => 4,
+    ]))->assertSessionHasNoErrors();
+
+    expect($event->fresh())->max_claims_per_household->toBe(4)->status->toBe(EventStatus::Active);
+});
+
+it('records who created, changed and deleted an event', function () {
+    $this->actingAs($this->superAdmin)->post(route('admin.events.store'), eventPayload(['allocation_type' => 'Per Resident', 'max_claims_per_household' => 2]))
+        ->assertSessionHasNoErrors();
+    $event = ReliefEvent::query()->latest('id')->firstOrFail();
+
+    $this->actingAs($this->superAdmin)->put(route('admin.events.update', $event), eventPayload([
+        'allocation_type' => 'Per Resident', 'max_claims_per_household' => 3, 'title' => 'Renamed relief',
+    ]))->assertSessionHasNoErrors();
+    $this->actingAs($this->admin)->put(route('admin.events.update', $event), eventPayload(['allocation_type' => 'Per Resident', 'title' => 'Renamed relief', 'status' => 'Active']))
+        ->assertSessionHasNoErrors();
+
+    $changes = $event->changes()->oldest('id')->get();
+
+    expect($changes->pluck('type')->all())->toBe(['created', 'updated', 'updated'])
+        ->and($changes[0]->summary)->toContain('Per Resident, up to 2 per household')
+        ->and($changes[1]->summary)->toContain('Most members per household 2 to 3')->toContain('Name Typhoon relief to Renamed relief')
+        ->and($changes[1]->changed_by_user_id)->toBe($this->superAdmin->id)
+        ->and($changes[2]->summary)->toBe('Changed Status Draft to Active.')
+        ->and($changes[2]->changed_by_user_id)->toBe($this->admin->id)
+        ->and($changes[1]->data['before']['max_claims_per_household'])->toBe('2');
+
+    $draft = ReliefEvent::factory()->draft()->create(['municipality_id' => $this->municipality->id, 'title' => 'Mistake']);
+
+    $this->actingAs($this->admin)->delete(route('admin.events.destroy', $draft))->assertSessionHasNoErrors();
+
+    expect(ReliefEventChange::query()->where('type', 'deleted')->where('event_title', 'Mistake')->value('relief_event_id'))->toBeNull();
+    $this->actingAs($this->admin)->get(route('admin.events'))->assertInertia(fn ($page) => $page
+        ->where('deletedEvents.0.title', 'Mistake')
+        ->where('deletedEvents.0.changed_by', $this->admin->name));
+});
+
+it('records nothing when a save changes nothing, and keeps the history with the account', function () {
+    $event = ReliefEvent::factory()->draft()->create([
+        'municipality_id' => $this->municipality->id, 'allocation_type' => 'Per Household', 'start_date' => '2026-10-01', 'end_date' => '2026-10-31',
+    ]);
+
+    $this->actingAs($this->admin)->put(route('admin.events.update', $event), eventPayload(['title' => $event->title, 'status' => 'Draft']))
+        ->assertSessionHasNoErrors();
+
+    expect($event->changes()->count())->toBe(0);
+
+    $this->actingAs($this->admin)->put(route('admin.events.update', $event), eventPayload(['title' => 'New title', 'status' => 'Draft']));
+
+    expect($event->changes()->count())->toBe(1)->and($this->admin->hasHistory())->toBeTrue();
+});
+
+it('only shows an admin the deleted drafts of their own municipality', function () {
+    ReliefEventChange::factory()->create(['event_title' => 'Mine', 'type' => 'deleted', 'relief_event_id' => null, 'municipality_id' => $this->municipality->id]);
+    ReliefEventChange::factory()->create(['event_title' => 'Elsewhere', 'type' => 'deleted', 'relief_event_id' => null, 'municipality_id' => $this->otherMunicipality->id]);
+
+    $this->actingAs($this->admin)->get(route('admin.events'))
+        ->assertInertia(fn ($page) => $page->has('deletedEvents', 1)->where('deletedEvents.0.title', 'Mine'));
+    $this->actingAs($this->superAdmin)->get(route('admin.events'))->assertInertia(fn ($page) => $page->has('deletedEvents', 2));
 });
 
 it('tells the page whether the viewer may set the limit', function () {

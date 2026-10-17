@@ -2,6 +2,7 @@ import { Head, useForm, usePage } from '@inertiajs/react';
 import {
     CalendarDays,
     CheckCircle2,
+    History,
     Lock,
     PackageCheck,
     Pencil,
@@ -47,10 +48,21 @@ type ReliefEvent = {
     claims_count: number;
     can_edit: boolean;
     can_delete: boolean;
+    limit_locked: boolean;
+    history: HistoryLine[];
+};
+
+type HistoryLine = {
+    id: number;
+    type: string;
+    summary: string;
+    changed_by: string;
+    changed_at: string | null;
 };
 
 type Props = {
     events: ReliefEvent[];
+    deletedEvents: (HistoryLine & { title: string })[];
     municipalities: { id: number; name: string }[];
     allocationTypes: string[];
     canSetLimit: boolean;
@@ -171,7 +183,11 @@ function EventForm({
                 <Field
                     id="event-limit"
                     label="Most members per household"
-                    hint="Leave empty for no limit. After this many members of one household have claimed, the next one is refused."
+                    hint={
+                        editing?.limit_locked
+                            ? 'Locked. The limit cannot change once an event is active, so the rules stay the same during the distribution.'
+                            : 'Leave empty for no limit. After this many members of one household have claimed, the next one is refused. It locks when the event becomes active.'
+                    }
                     error={errors.max_claims_per_household}
                 >
                     <Input
@@ -180,6 +196,7 @@ function EventForm({
                         min={1}
                         max={50}
                         inputMode="numeric"
+                        disabled={editing?.limit_locked}
                         value={data.max_claims_per_household}
                         onChange={(event) =>
                             setData(
@@ -243,8 +260,30 @@ function EventForm({
     );
 }
 
+function HistoryList({ lines }: { lines: HistoryLine[] }) {
+    return (
+        <ul className="grid gap-2">
+            {lines.map((line) => (
+                <li
+                    key={line.id}
+                    className="rounded-lg border-2 border-slate-200 p-3 dark:border-border"
+                >
+                    <p className="font-semibold">{line.summary}</p>
+                    <p className="text-sm text-muted-foreground">
+                        {line.changed_by}
+                        {line.changed_at
+                            ? ` · ${formatDate(line.changed_at)}`
+                            : ''}
+                    </p>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
 export default function ReliefEvents({
     events,
+    deletedEvents,
     municipalities,
     allocationTypes,
     canSetLimit,
@@ -418,9 +457,36 @@ export default function ReliefEvents({
                                         )}
                                     </div>
                                 </div>
+                                {event.history.length > 0 && (
+                                    <details className="text-base">
+                                        <summary className="flex w-fit cursor-pointer items-center gap-2 font-semibold text-blue-700 dark:text-sky-300">
+                                            <History className="size-4" />
+                                            History ({event.history.length})
+                                        </summary>
+                                        <div className="mt-2">
+                                            <HistoryList
+                                                lines={event.history}
+                                            />
+                                        </div>
+                                    </details>
+                                )}
                             </li>
                         ))}
                     </ul>
+                )}
+
+                {deletedEvents.length > 0 && (
+                    <section className="grid gap-2">
+                        <h2 className="text-xl font-bold">
+                            Recently deleted drafts
+                        </h2>
+                        <HistoryList
+                            lines={deletedEvents.map((line) => ({
+                                ...line,
+                                summary: `${line.title}: ${line.summary}`,
+                            }))}
+                        />
+                    </section>
                 )}
             </div>
 

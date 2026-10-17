@@ -97,6 +97,23 @@ class ReliefEvent extends Model
     }
 
     /**
+     * @return HasMany<ReliefEventChange, $this>
+     */
+    public function changes(): HasMany
+    {
+        return $this->hasMany(ReliefEventChange::class);
+    }
+
+    /**
+     * Whether the limit per household can still be set. It is locked from the moment the event is active, so
+     * nobody can change the rules of a distribution that has started.
+     */
+    public function limitIsLocked(): bool
+    {
+        return $this->status !== EventStatus::Draft;
+    }
+
+    /**
      * @return HasMany<ReliefLog, $this>
      */
     public function logs(): HasMany

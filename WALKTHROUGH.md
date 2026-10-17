@@ -258,7 +258,9 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 - [ ] **New event**, Per Resident: a **Most members per household** box appears. Set it to 2.
 - [ ] Choose Per Household: the box disappears.
 - [ ] As an encoder, scan three members of one household for a Per Resident event with limit 2: the third is refused.
-- [ ] Edit an **Active** event's limit: allowed for the super admin.
+- [ ] Edit a **Draft** event's limit: allowed for the super admin. Edit an **Active** event (Cash Aid): the limit box is greyed out with a "Locked" note, so nobody can change the rules once a distribution has started.
+- [ ] Create, edit and activate an event, then open its **History**: each change is listed with who made it and from what to what (for example "Most members per household 2 to 3").
+- [ ] Delete a draft: it appears under **Recently deleted drafts** with who deleted it. As an admin, you only see your own municipality's.
 - [ ] You can create events for either municipality.
 
 **Reports**
