@@ -90,6 +90,58 @@ function Stat({
     );
 }
 
+/**
+ * Whether a person has claimed, with when and who collected, or that the household has used its limit.
+ */
+function claimDetail(member: Member): string | null {
+    if (!member.claimed || !member.claimed_at) {
+        return null;
+    }
+
+    return member.collected_by
+        ? `${member.claimed_at} · by ${member.collected_by}`
+        : member.claimed_at;
+}
+
+function ClaimStatus({
+    member,
+    limitReached,
+    className = '',
+    showDetail = true,
+}: {
+    member: Member;
+    limitReached: boolean;
+    className?: string;
+    /** Whether the time and the person who collected are shown under the badge. */
+    showDetail?: boolean;
+}) {
+    if (member.claimed) {
+        const detail = claimDetail(member);
+
+        return (
+            <span className={`grid text-sm ${className}`}>
+                <span className="flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-400">
+                    <CheckCircle2 className="size-4" />
+                    Yes
+                </span>
+                {showDetail && detail && (
+                    <span className="text-xs text-muted-foreground">
+                        {detail}
+                    </span>
+                )}
+            </span>
+        );
+    }
+
+    return limitReached ? (
+        <span
+            className={`text-sm font-semibold text-amber-700 dark:text-amber-300 ${className}`}
+        >
+            Limit reached
+        </span>
+    ) : null;
+}
+
 function shareRule(event: NonNullable<Props['event']>): string {
     if (event.allocation_type === 'Per Household') {
         return 'One share for each household.';
@@ -175,11 +227,12 @@ export default function DistributionList({
                         nothing to list.
                     </p>
                 ) : (
-                    <div className="grid gap-4 sm:grid-cols-2 print:hidden">
-                        <div className="sm:col-span-2">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 print:hidden">
+                        <div className="min-w-0 sm:col-span-2">
                             <Field id="list-event" label="Relief event">
                                 <ChoiceSelect
                                     id="list-event"
+                                    className="w-full min-w-0"
                                     value={filters.event?.toString() ?? ''}
                                     placeholder="Choose an event"
                                     values={events.map((candidate) => ({
@@ -195,21 +248,24 @@ export default function DistributionList({
                                 />
                             </Field>
                         </div>
-                        <Field id="list-barangay" label="Barangay">
-                            <ChoiceSelect
-                                id="list-barangay"
-                                value={filters.barangay?.toString() ?? ''}
-                                placeholder="Choose a barangay"
-                                values={barangays.map((candidate) => ({
-                                    value: candidate.id.toString(),
-                                    label: candidate.name,
-                                }))}
-                                onChange={(value) =>
-                                    apply({ barangay: Number(value) })
-                                }
-                            />
-                        </Field>
-                        <label className="flex min-h-12 items-center gap-3 self-end rounded-lg border-2 border-slate-200 px-3 text-base dark:border-border">
+                        <div className="min-w-0">
+                            <Field id="list-barangay" label="Barangay">
+                                <ChoiceSelect
+                                    id="list-barangay"
+                                    className="w-full min-w-0"
+                                    value={filters.barangay?.toString() ?? ''}
+                                    placeholder="Choose a barangay"
+                                    values={barangays.map((candidate) => ({
+                                        value: candidate.id.toString(),
+                                        label: candidate.name,
+                                    }))}
+                                    onChange={(value) =>
+                                        apply({ barangay: Number(value) })
+                                    }
+                                />
+                            </Field>
+                        </div>
+                        <label className="flex min-h-12 min-w-0 items-center gap-3 self-end rounded-lg border-2 border-slate-200 px-3 text-base dark:border-border">
                             <Checkbox
                                 checked={filters.only_unclaimed}
                                 onCheckedChange={(checked) =>
@@ -222,7 +278,7 @@ export default function DistributionList({
                 )}
 
                 {list && (
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 print:hidden">
+                    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 print:hidden">
                         <Stat
                             label="Households"
                             value={list.totals.households}
@@ -311,13 +367,45 @@ export default function DistributionList({
                                             </span>
                                         )}
                                     </div>
-                                    <table className="w-full table-fixed text-left text-base">
+                                    <ul className="lg:hidden print:hidden">
+                                        {household.members.map((member) => (
+                                            <li
+                                                key={member.system_id_no}
+                                                className="grid gap-0.5 border-b border-slate-100 px-4 py-3 last:border-b-0 dark:border-border"
+                                            >
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <p className="min-w-0 font-semibold">
+                                                        {member.name}
+                                                    </p>
+                                                    <ClaimStatus
+                                                        member={member}
+                                                        limitReached={
+                                                            household.limit_reached
+                                                        }
+                                                        showDetail={false}
+                                                        className="shrink-0"
+                                                    />
+                                                </div>
+                                                <p className="font-mono text-xs text-muted-foreground">
+                                                    {member.system_id_no} ·{' '}
+                                                    {member.age} yrs
+                                                </p>
+                                                {claimDetail(member) && (
+                                                    <p className="text-xs text-muted-foreground">
+                                                        Claimed{' '}
+                                                        {claimDetail(member)}
+                                                    </p>
+                                                )}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                    <table className="hidden w-full table-fixed text-left text-base lg:table print:table">
                                         <colgroup>
                                             <col className="w-40" />
                                             <col />
                                             <col className="w-14" />
-                                            <col className="w-36" />
-                                            <col className="hidden w-48 sm:table-column" />
+                                            <col className="w-44" />
+                                            <col className="w-48" />
                                         </colgroup>
                                         <thead>
                                             <tr className="border-b-2 border-slate-200 text-sm text-muted-foreground dark:border-border">
@@ -333,7 +421,7 @@ export default function DistributionList({
                                                 <th className="px-2 py-2 font-semibold">
                                                     Claimed
                                                 </th>
-                                                <th className="hidden w-48 px-4 py-2 font-semibold sm:table-cell">
+                                                <th className="px-4 py-2 font-semibold">
                                                     Signature
                                                 </th>
                                             </tr>
@@ -353,31 +441,15 @@ export default function DistributionList({
                                                     <td className="px-2 py-2">
                                                         {member.age}
                                                     </td>
-                                                    <td className="px-2 py-2 text-sm">
-                                                        {member.claimed ? (
-                                                            <span className="grid">
-                                                                <span className="flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-400">
-                                                                    <CheckCircle2 className="size-4" />
-                                                                    Yes
-                                                                </span>
-                                                                {member.claimed_at && (
-                                                                    <span className="text-xs text-muted-foreground">
-                                                                        {
-                                                                            member.claimed_at
-                                                                        }
-                                                                        {member.collected_by
-                                                                            ? ` · by ${member.collected_by}`
-                                                                            : ''}
-                                                                    </span>
-                                                                )}
-                                                            </span>
-                                                        ) : household.limit_reached ? (
-                                                            <span className="font-semibold text-amber-700 dark:text-amber-300">
-                                                                Limit reached
-                                                            </span>
-                                                        ) : null}
+                                                    <td className="px-2 py-2">
+                                                        <ClaimStatus
+                                                            member={member}
+                                                            limitReached={
+                                                                household.limit_reached
+                                                            }
+                                                        />
                                                     </td>
-                                                    <td className="hidden px-4 py-2 sm:table-cell">
+                                                    <td className="px-4 py-2">
                                                         <div className="h-7 border-b border-slate-400" />
                                                     </td>
                                                 </tr>
