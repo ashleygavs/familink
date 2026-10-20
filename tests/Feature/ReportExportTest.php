@@ -114,10 +114,10 @@ it('lists who can claim in a barangay, grouped by household, and who already has
         ->assertInertia(fn ($page) => $page
             ->where('barangay', 'San Jose')
             ->where('list.totals', ['households' => 1, 'members' => 2, 'claimed' => 1])
-            ->where('list.households.0.members.0.name', 'Ana Reyes')
-            ->where('list.households.0.members.0.claimed', true)
-            ->where('list.households.0.members.0.collected_by', 'Rosa Reyes')
-            ->where('list.households.0.members.1.claimed', false));
+            ->where('list.households.data.0.members.0.name', 'Ana Reyes')
+            ->where('list.households.data.0.members.0.claimed', true)
+            ->where('list.households.data.0.members.0.collected_by', 'Rosa Reyes')
+            ->where('list.households.data.0.members.1.claimed', false));
 });
 
 it('can show only those who have not claimed yet', function () {
@@ -126,7 +126,7 @@ it('can show only those who have not claimed yet', function () {
     ($this->person)($family, ['first_name' => 'Ben', 'last_name' => 'Reyes']);
 
     $this->actingAs($this->encoder)->get(route('reports.distribution-list', ['only_unclaimed' => 1]))
-        ->assertInertia(fn ($page) => $page->where('list.totals.members', 1)->where('list.households.0.members.0.name', 'Ben Reyes'));
+        ->assertInertia(fn ($page) => $page->where('list.households.total', 1)->has('list.households.data.0.members', 1)->where('list.households.data.0.members.0.name', 'Ben Reyes')->where('list.totals.members', 2));
 });
 
 it('lists a household once for a per household event and marks a reached limit', function () {
@@ -139,11 +139,11 @@ it('lists a household once for a per household event and marks a reached limit',
     ReliefLog::factory()->create(['event_id' => $limited->id, 'resident_id' => $first->id, 'household_id' => $family->id, 'scanned_by_user_id' => $this->encoder->id]);
 
     $this->actingAs($this->encoder)->get(route('reports.distribution-list', ['event' => $perHousehold->id]))
-        ->assertInertia(fn ($page) => $page->where('list.households.0.claimed', true)->where('list.households.0.members.1.claimed', true));
+        ->assertInertia(fn ($page) => $page->where('list.households.data.0.claimed', true)->where('list.households.data.0.members.1.claimed', true));
     $this->actingAs($this->encoder)->get(route('reports.distribution-list', ['event' => $limited->id]))
-        ->assertInertia(fn ($page) => $page->where('list.households.0.limit_reached', true)->where('list.households.0.members.1.claimed', false));
+        ->assertInertia(fn ($page) => $page->where('list.households.data.0.limit_reached', true)->where('list.households.data.0.members.1.claimed', false));
     $this->actingAs($this->encoder)->get(route('reports.distribution-list', ['event' => $limited->id, 'only_unclaimed' => 1]))
-        ->assertInertia(fn ($page) => $page->where('list.totals.members', 0));
+        ->assertInertia(fn ($page) => $page->where('list.households.total', 0)->where('list.totals.members', 2));
 });
 
 it('keeps an encoder to their own barangay and leaves out draft events', function () {
@@ -173,4 +173,85 @@ it('keeps the printable list to encoders and admins', function () {
     $this->actingAs($this->stakeholder)->get(route('reports.distribution-list'))->assertForbidden();
     $this->actingAs($this->stakeholder)->get(route('reports.distribution-list.csv'))->assertForbidden();
     $this->actingAs($this->admin)->get(route('reports.distribution-list'))->assertOk();
+});
+
+it('searches by name, resident ID, household code or street and treats percent signs as text', function () {
+    $reyes = ($this->household)($this->mine);
+    $reyes->update(['street_address' => '21 Mabini Street', 'household_code' => 'HH-SJ-0100']);
+    $cruz = ($this->household)($this->mine);
+    $cruz->update(['street_address' => '5 Rizal Avenue', 'household_code' => 'HH-SJ-0200']);
+    $ana = ($this->person)($reyes, ['first_name' => 'Ana', 'last_name' => 'Reyes']);
+    ($this->person)($reyes, ['first_name' => 'Ben', 'last_name' => 'Reyes']);
+    ($this->person)($cruz, ['first_name' => 'Carl', 'last_name' => 'Cruz']);
+
+    $search = fn (string $term) => $this->actingAs($this->encoder)->get(route('reports.distribution-list', ['q' => $term]));
+
+    $search('reyes')->assertInertia(fn ($page) => $page->where('list.households.total', 1)->where('list.households.data.0.code', 'HH-SJ-0100')->where('filters.q', 'reyes'));
+    $search('Carl')->assertInertia(fn ($page) => $page->where('list.households.total', 1)->where('list.households.data.0.code', 'HH-SJ-0200'));
+    $search($ana->system_id_no)->assertInertia(fn ($page) => $page->where('list.households.total', 1)->where('list.households.data.0.code', 'HH-SJ-0100'));
+    $search('HH-SJ-0200')->assertInertia(fn ($page) => $page->where('list.households.total', 1)->where('list.households.data.0.code', 'HH-SJ-0200'));
+    $search('Rizal')->assertInertia(fn ($page) => $page->where('list.households.total', 1));
+    $search('nobody')->assertInertia(fn ($page) => $page->where('list.households.total', 0));
+    $search('%')->assertInertia(fn ($page) => $page->where('list.households.total', 0));
+
+    // A match shows the whole household, and the totals still describe the whole barangay.
+    $search('Ana')->assertInertia(fn ($page) => $page->has('list.households.data.0.members', 2)->where('list.totals', ['households' => 2, 'members' => 3, 'claimed' => 0]));
+});
+
+it('pages the households ten at a time and keeps the totals for the whole barangay', function () {
+    foreach (range(1, 12) as $number) {
+        $household = ($this->household)($this->mine);
+        $household->update(['household_code' => sprintf('HH-SJ-%04d', $number)]);
+        ($this->person)($household, ['first_name' => 'Person', 'last_name' => 'Number'.$number]);
+    }
+
+    $this->actingAs($this->encoder)->get(route('reports.distribution-list'))
+        ->assertInertia(fn ($page) => $page
+            ->has('list.households.data', 10)
+            ->where('list.households.current_page', 1)->where('list.households.last_page', 2)->where('list.households.total', 12)
+            ->where('list.households.data.0.code', 'HH-SJ-0001')
+            ->where('list.totals', ['households' => 12, 'members' => 12, 'claimed' => 0])
+            ->where('filters.all', false));
+    $this->actingAs($this->encoder)->get(route('reports.distribution-list', ['page' => 2, 'q' => 'Number']))
+        ->assertInertia(fn ($page) => $page->has('list.households.data', 2)->where('list.households.data.0.code', 'HH-SJ-0011'));
+});
+
+it('prints everything on one sheet and ignores the search when asked for the whole list', function () {
+    foreach (range(1, 12) as $number) {
+        $household = ($this->household)($this->mine);
+        ($this->person)($household, ['first_name' => 'Person', 'last_name' => 'Number'.$number]);
+    }
+
+    $this->actingAs($this->encoder)->get(route('reports.distribution-list', ['all' => 1, 'q' => 'Number1']))
+        ->assertInertia(fn ($page) => $page
+            ->has('list.households.data', 12)->where('list.households.last_page', 1)
+            ->where('filters.all', true)->where('filters.q', '')->where('notice', null));
+});
+
+it('falls back to pages when a barangay is too big to print on one sheet', function () {
+    $this->app->instance(BuildDistributionList::class, new class extends BuildDistributionList
+    {
+        public function countHouseholds(ReliefEvent $event, Barangay $barangay, bool $onlyUnclaimed = false): int
+        {
+            return self::MAX_PRINT_HOUSEHOLDS + 1;
+        }
+    });
+    foreach (range(1, 12) as $number) {
+        ($this->person)(($this->household)($this->mine));
+    }
+
+    $this->actingAs($this->encoder)->get(route('reports.distribution-list', ['all' => 1]))
+        ->assertInertia(fn ($page) => $page
+            ->where('filters.all', false)->has('list.households.data', 10)
+            ->where('notice', fn (string $notice) => str_contains($notice, 'too many households')));
+});
+
+it('downloads every household in the csv, whatever page or search is on the screen', function () {
+    foreach (range(1, 12) as $number) {
+        ($this->person)(($this->household)($this->mine), ['first_name' => 'Person', 'last_name' => 'Number'.$number]);
+    }
+
+    $rows = ($this->rows)($this->actingAs($this->encoder)->get(route('reports.distribution-list.csv', ['q' => 'Number1', 'page' => 2])));
+
+    expect($rows)->toHaveCount(13);
 });

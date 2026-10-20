@@ -1,13 +1,18 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
     CalendarDays,
     CheckCircle2,
+    ChevronLeft,
+    ChevronRight,
     Download,
     Home,
     ListChecks,
     MapPin,
     Printer,
+    Search,
+    Undo2,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ChoiceSelect, Field } from '@/components/registration/field';
 import { Button } from '@/components/ui/button';
@@ -19,9 +24,11 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { formatDate } from '@/lib/format';
 import { distributionList } from '@/routes/reports';
 import { csv as distributionListCsv } from '@/routes/reports/distribution-list';
+import type { Paginated } from '@/types';
 
 type Member = {
     system_id_no: string;
@@ -47,7 +54,13 @@ type Props = {
         event: number | null;
         barangay: number | null;
         only_unclaimed: boolean;
+        /** What is typed in the search box. */
+        q: string;
+        /** Every household on one sheet, with no pages and no search. */
+        all: boolean;
     };
+    /** Why a request could not be done as asked, such as a barangay too big to print on one sheet. */
+    notice: string | null;
     events: {
         id: number;
         title: string;
@@ -65,7 +78,8 @@ type Props = {
     } | null;
     barangay: string | null;
     list: {
-        households: HouseholdEntry[];
+        households: Paginated<HouseholdEntry>;
+        /** The whole barangay, whatever the search or the page. */
         totals: { households: number; members: number; claimed: number };
     } | null;
     generated: { at: string; by: string };
@@ -90,9 +104,6 @@ function Stat({
     );
 }
 
-/**
- * Whether a person has claimed, with when and who collected, or that the household has used its limit.
- */
 function claimDetail(member: Member): string | null {
     if (!member.claimed || !member.claimed_at) {
         return null;
@@ -103,6 +114,9 @@ function claimDetail(member: Member): string | null {
         : member.claimed_at;
 }
 
+/**
+ * Whether a person has claimed, with when and who collected, or that the household has used its limit.
+ */
 function ClaimStatus({
     member,
     limitReached,
@@ -152,8 +166,37 @@ function shareRule(event: NonNullable<Props['event']>): string {
         : `One share for each person, up to ${event.limit} per household.`;
 }
 
+type Query = {
+    event: number | null;
+    barangay: number | null;
+    only_unclaimed: boolean;
+    q: string;
+    all: boolean;
+};
+
+/** Loads the list again with these options. A new search or filter always starts on the first page. */
+function visit(query: Query, then?: () => void): void {
+    router.get(
+        distributionList().url,
+        {
+            event: query.event ?? undefined,
+            barangay: query.barangay ?? undefined,
+            only_unclaimed: query.only_unclaimed ? 1 : undefined,
+            q: query.q === '' ? undefined : query.q,
+            all: query.all ? 1 : undefined,
+        },
+        {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onSuccess: then,
+        },
+    );
+}
+
 export default function DistributionList({
     filters,
+    notice,
     events,
     barangays,
     event,
@@ -161,23 +204,37 @@ export default function DistributionList({
     list,
     generated,
 }: Props) {
-    function apply(
-        next: Partial<{
-            event: number | null;
-            barangay: number | null;
-            only_unclaimed: boolean;
-        }>,
-    ) {
-        const merged = { ...filters, ...next };
+    const [search, setSearch] = useState(filters.q);
+    const people = list?.households.data ?? [];
+    const hasPeople = people.length > 0;
+    const pages = list?.households;
 
-        router.get(
-            distributionList().url,
-            {
-                event: merged.event ?? undefined,
-                barangay: merged.barangay ?? undefined,
-                only_unclaimed: merged.only_unclaimed ? 1 : undefined,
-            },
-            { preserveState: true, preserveScroll: true, replace: true },
+    function apply(next: Partial<Query>) {
+        visit({ ...filters, ...next });
+    }
+
+    // Typing searches by itself after a short pause, so the encoder does not need to press a button.
+    useEffect(() => {
+        setSearch(filters.q);
+    }, [filters.q]);
+
+    useEffect(() => {
+        if (search === filters.q) {
+            return;
+        }
+
+        const timer = window.setTimeout(
+            () => visit({ ...filters, q: search, all: false }),
+            350,
+        );
+
+        return () => window.clearTimeout(timer);
+    }, [search, filters]);
+
+    // Prints the whole barangay: loads the full list, then opens the print window.
+    function printAll() {
+        visit({ ...filters, q: '', all: true }, () =>
+            window.setTimeout(() => window.print(), 600),
         );
     }
 
@@ -188,8 +245,6 @@ export default function DistributionList({
             only_unclaimed: filters.only_unclaimed ? 1 : undefined,
         },
     }).url;
-    const hasPeople = list !== null && list.households.length > 0;
-
     return (
         <>
             <Head title="Distribution List" />
@@ -213,13 +268,48 @@ export default function DistributionList({
                                     Download CSV
                                 </a>
                             </Button>
+                            {filters.all ? (
+                                <Button
+                                    variant="outline"
+                                    onClick={() => apply({ all: false })}
+                                >
+                                    <Undo2 />
+                                    Back to pages
+                                </Button>
+                            ) : (
+                                <Button variant="outline" onClick={printAll}>
+                                    <Printer />
+                                    Print all
+                                </Button>
+                            )}
                             <Button onClick={() => window.print()}>
                                 <Printer />
-                                Print / Save as PDF
+                                {filters.all ? 'Print' : 'Print this page'}
                             </Button>
                         </div>
                     )}
                 </div>
+
+                {notice && (
+                    <p
+                        role="status"
+                        className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 text-lg text-amber-950 print:hidden"
+                    >
+                        {notice}
+                    </p>
+                )}
+
+                {filters.all && pages && (
+                    <p
+                        role="status"
+                        className="rounded-xl border-2 border-blue-200 bg-sky-50 p-4 text-lg dark:border-sidebar-border dark:bg-sidebar print:hidden"
+                    >
+                        This is the whole list: {pages.total}{' '}
+                        {pages.total === 1 ? 'household' : 'households'} on one
+                        sheet, ready to print. Search and pages are turned off
+                        until you go back.
+                    </p>
+                )}
 
                 {events.length === 0 ? (
                     <p className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 text-lg text-amber-950 print:hidden">
@@ -228,6 +318,32 @@ export default function DistributionList({
                     </p>
                 ) : (
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 print:hidden">
+                        {!filters.all && (
+                            <div className="min-w-0 sm:col-span-2">
+                                <Field
+                                    id="list-search"
+                                    label="Find a person or household"
+                                    hint="Search by name, resident ID, household code or street. It searches as you type."
+                                >
+                                    <div className="relative">
+                                        <Search className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-muted-foreground" />
+                                        <Input
+                                            id="list-search"
+                                            type="search"
+                                            autoComplete="off"
+                                            className="pl-10"
+                                            placeholder="Name, ID, household or street"
+                                            value={search}
+                                            onChange={(inputEvent) =>
+                                                setSearch(
+                                                    inputEvent.target.value,
+                                                )
+                                            }
+                                        />
+                                    </div>
+                                </Field>
+                            </div>
+                        )}
                         <div className="min-w-0 sm:col-span-2">
                             <Field id="list-event" label="Relief event">
                                 <ChoiceSelect
@@ -328,19 +444,43 @@ export default function DistributionList({
                                     {filters.only_unclaimed
                                         ? ' · only people who have not claimed'
                                         : ''}
+                                    {filters.q !== ''
+                                        ? ` · matching "${filters.q}"`
+                                        : ''}
+                                    {pages && filters.all
+                                        ? ` · full list, ${pages.total} households`
+                                        : ''}
+                                    {pages &&
+                                    !filters.all &&
+                                    pages.last_page > 1
+                                        ? ` · page ${pages.current_page} of ${pages.last_page}`
+                                        : ''}
                                 </span>
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="grid gap-4">
-                            {list && list.households.length === 0 && (
-                                <p className="rounded-xl border-2 border-slate-200 p-6 text-lg dark:border-border">
-                                    {filters.only_unclaimed
-                                        ? 'Everyone in this barangay has already claimed.'
-                                        : 'No approved residents in this barangay yet.'}
+                            {pages && !filters.all && (
+                                <p className="text-base text-muted-foreground print:hidden">
+                                    {filters.q !== '' || filters.only_unclaimed
+                                        ? `${pages.total} ${pages.total === 1 ? 'household matches' : 'households match'}.`
+                                        : `${pages.total} ${pages.total === 1 ? 'household' : 'households'}.`}
+                                    {pages.last_page > 1
+                                        ? ` Showing page ${pages.current_page} of ${pages.last_page}.`
+                                        : ''}
                                 </p>
                             )}
 
-                            {list?.households.map((household) => (
+                            {list && people.length === 0 && (
+                                <p className="rounded-xl border-2 border-slate-200 p-6 text-lg dark:border-border">
+                                    {filters.q !== ''
+                                        ? `No household matches "${filters.q}".`
+                                        : filters.only_unclaimed
+                                          ? 'Everyone in this barangay has already claimed.'
+                                          : 'No approved residents in this barangay yet.'}
+                                </p>
+                            )}
+
+                            {people.map((household) => (
                                 <section
                                     key={household.code}
                                     className="break-inside-avoid overflow-hidden rounded-xl border-2 border-blue-200 dark:border-sidebar-border"
@@ -462,11 +602,45 @@ export default function DistributionList({
                     </Card>
                 )}
 
+                {pages && !filters.all && pages.last_page > 1 && (
+                    <nav
+                        className="flex items-center justify-between gap-3 print:hidden"
+                        aria-label="Pagination"
+                    >
+                        {pages.prev_page_url ? (
+                            <Button asChild variant="outline">
+                                <Link href={pages.prev_page_url} preserveScroll>
+                                    <ChevronLeft />
+                                    Previous
+                                </Link>
+                            </Button>
+                        ) : (
+                            <span />
+                        )}
+                        <span className="text-base font-medium">
+                            Page {pages.current_page} of {pages.last_page}
+                        </span>
+                        {pages.next_page_url ? (
+                            <Button asChild variant="outline">
+                                <Link href={pages.next_page_url} preserveScroll>
+                                    Next
+                                    <ChevronRight />
+                                </Link>
+                            </Button>
+                        ) : (
+                            <span />
+                        )}
+                    </nav>
+                )}
+
                 {hasPeople && (
                     <p className="text-base text-muted-foreground print:hidden">
-                        To get a PDF file, choose &quot;Save as PDF&quot; as the
-                        printer in the print window. Use the CSV to sort or edit
-                        the list in Excel.
+                        <strong>Print this page</strong> prints what you see.{' '}
+                        <strong>Print all</strong> prints every household in the
+                        barangay on one sheet, without the search. To get a PDF
+                        file, choose &quot;Save as PDF&quot; as the printer in
+                        the print window. The CSV always holds the whole list,
+                        to sort or edit in Excel.
                     </p>
                 )}
             </div>

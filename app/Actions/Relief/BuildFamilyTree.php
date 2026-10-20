@@ -7,53 +7,78 @@ use App\Models\Household;
 use App\Models\Resident;
 
 /**
- * Gathers the family around a household as graph data: its members, then their parents, spouses and
- * children, a few generations out in each direction. The size is capped so a very large family stays
- * readable and fast.
+ * Gathers the family around a household as graph data: its members, then their parents, spouses and children, a few
+ * generations out in each direction. How far it reaches depends on the chosen level. Beyond the close family only
+ * parents and children are followed, so the tree grows along blood lines and not into every in-law's family. The size
+ * is capped so a very large family stays readable and fast.
  *
- * @phpstan-type TreeNode array{id: int, name: string, gender: string, birth_year: int, status: string, barangay_name: string|null, household_code: string|null, in_household: bool, is_deceased: bool}
+ * @phpstan-type TreeNode array{id: int, name: string, gender: string, birth_year: int, status: string, barangay_name: string|null, household_code: string|null, in_household: bool, is_deceased: bool, relation: string|null, relation_group: string|null, relation_rank: int|null}
  * @phpstan-type TreeEdge array{from: int, to: int, kind: string}
  */
 class BuildFamilyTree
 {
-    /** How many steps away from the household members the tree reaches. */
-    private const DEPTH = 3;
+    /**
+     * How many steps each level reaches from the people of the household. Close family goes as far as aunts, uncles
+     * and great-grandparents, the next level adds first cousins, and the last adds second cousins.
+     *
+     * @var array<string, int>
+     */
+    public const REACHES = ['close' => 3, 'cousins' => 4, 'wide' => 6];
+
+    /** Up to this many steps from the household, spouses are followed too, as in-laws are part of the close family. */
+    private const CLOSE_DEPTH = 3;
 
     private const MAX_NODES = 120;
 
+    /** The wider levels reach more people, so they are allowed a larger tree. */
+    private const MAX_NODES_WIDE = 250;
+
     /**
-     * @return array{nodes: list<TreeNode>, edges: list<TreeEdge>, truncated: bool}
+     * @return array{nodes: list<TreeNode>, edges: list<TreeEdge>, truncated: bool, truncated_relatives: bool, reference: array{id: int, name: string}|null, reach: string}
      */
-    public function handle(Household $household): array
+    public function handle(Household $household, string $reach = 'close'): array
     {
-        $memberIds = Resident::query()
+        $reach = array_key_exists($reach, self::REACHES) ? $reach : 'close';
+        $steps = self::REACHES[$reach];
+        $limit = $steps > self::CLOSE_DEPTH ? self::MAX_NODES_WIDE : self::MAX_NODES;
+
+        $memberIds = array_values(Resident::query()
             ->where('household_id', $household->id)
             ->whereNot('status', ResidentStatus::Archived->value)
             ->pluck('id')
             ->map(fn ($id): int => (int) $id)
-            ->all();
+            ->all());
 
         $ids = array_fill_keys($memberIds, true);
         $frontier = $memberIds;
         $truncated = false;
+        $truncatedRelatives = false;
 
-        for ($depth = 0; $depth < self::DEPTH && $frontier !== []; $depth++) {
-            $found = $this->neighbours(array_values($frontier));
+        for ($depth = 0; $depth < $steps && $frontier !== []; $depth++) {
+            ['follow' => $follow, 'leaves' => $leaves] = $this->neighbours($frontier, $depth >= self::CLOSE_DEPTH);
             $frontier = [];
 
-            foreach ($found as $id) {
-                if (isset($ids[$id])) {
-                    continue;
+            foreach ([[$follow, true], [$leaves, false]] as [$found, $expands]) {
+                foreach ($found as $id) {
+                    if (isset($ids[$id])) {
+                        continue;
+                    }
+
+                    if (count($ids) >= $limit) {
+                        $truncated = true;
+                        // Spouses past the close family are cut first. Only when relatives themselves are cut does the
+                        // page need to say that some of the family is missing.
+                        $truncatedRelatives = $truncatedRelatives || $expands;
+
+                        break 2;
+                    }
+
+                    $ids[$id] = true;
+
+                    if ($expands) {
+                        $frontier[] = $id;
+                    }
                 }
-
-                if (count($ids) >= self::MAX_NODES) {
-                    $truncated = true;
-
-                    break;
-                }
-
-                $ids[$id] = true;
-                $frontier[] = $id;
             }
         }
 
@@ -63,6 +88,11 @@ class BuildFamilyTree
             ->whereNot('status', ResidentStatus::Archived->value)
             ->get()
             ->keyBy('id');
+
+        $reference = $this->reference($household, $memberIds, $residents->all());
+        $describe = $this->describer($residents->all());
+
+        $relationship = fn (Resident $resident): ?array => $reference === null ? null : $describe->classify($reference->id, $resident->id);
 
         return [
             'nodes' => array_values($residents->map(fn (Resident $resident): array => [
@@ -75,33 +105,86 @@ class BuildFamilyTree
                 'household_code' => $resident->household?->household_code,
                 'in_household' => $resident->household_id === $household->id,
                 'is_deceased' => $resident->is_deceased,
+                'relation' => $relationship($resident)['label'] ?? null,
+                'relation_group' => $relationship($resident)['group'] ?? null,
+                'relation_rank' => $relationship($resident)['rank'] ?? null,
             ])->all()),
             'edges' => $this->edges($residents->all()),
             'truncated' => $truncated,
+            'truncated_relatives' => $truncatedRelatives,
+            'reference' => $reference === null ? null : ['id' => $reference->id, 'name' => $reference->full_name],
+            'reach' => $reach,
         ];
     }
 
     /**
-     * The people directly connected to the given residents: parents, spouses and children.
+     * The people directly connected to the given residents: parents, spouses and children. Past the close family a
+     * spouse is only shown, not followed any further, so the family of someone who married in does not take over the tree.
      *
      * @param  list<int>  $ids
-     * @return list<int>
+     * @return array{follow: list<int>, leaves: list<int>}
      */
-    private function neighbours(array $ids): array
+    private function neighbours(array $ids, bool $bloodOnly): array
     {
-        $linked = Resident::query()
-            ->whereIn('id', $ids)
-            ->get(['id', 'father_id', 'mother_id', 'spouse_id'])
-            ->flatMap(fn (Resident $resident): array => [$resident->father_id, $resident->mother_id, $resident->spouse_id])
-            ->filter()
-            ->map(fn ($id): int => (int) $id);
+        $linked = Resident::query()->whereIn('id', $ids)->get(['id', 'father_id', 'mother_id', 'spouse_id']);
+
+        $parents = $linked->flatMap(fn (Resident $resident): array => [$resident->father_id, $resident->mother_id]);
+        $spouses = $linked->pluck('spouse_id');
 
         $children = Resident::query()
             ->where(fn ($query) => $query->whereIn('father_id', $ids)->orWhereIn('mother_id', $ids))
-            ->pluck('id')
-            ->map(fn ($id): int => (int) $id);
+            ->pluck('id');
 
-        return array_values($linked->merge($children)->unique()->values()->all());
+        $unique = fn ($found): array => array_values($found->filter()->map(fn ($id): int => (int) $id)->unique()->values()->all());
+
+        return $bloodOnly
+            ? ['follow' => $unique($parents->merge($children)), 'leaves' => $unique($spouses)]
+            : ['follow' => $unique($parents->merge($spouses)->merge($children)), 'leaves' => []];
+    }
+
+    /**
+     * The person the relationship labels are given from: the head of the household, or the first member without one.
+     *
+     * @param  list<int>  $memberIds
+     * @param  array<int, Resident>  $residents
+     */
+    private function reference(Household $household, array $memberIds, array $residents): ?Resident
+    {
+        if ($household->head_resident_id !== null && isset($residents[$household->head_resident_id])) {
+            return $residents[$household->head_resident_id];
+        }
+
+        foreach ($memberIds as $id) {
+            if (isset($residents[$id])) {
+                return $residents[$id];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array<int, Resident>  $residents
+     */
+    private function describer(array $residents): DescribeRelationship
+    {
+        $parents = [];
+        $genders = [];
+        $spouses = [];
+
+        foreach ($residents as $resident) {
+            $genders[$resident->id] = $resident->gender;
+            $parents[$resident->id] = array_values(array_filter(
+                [$resident->father_id, $resident->mother_id],
+                fn (?int $parentId): bool => $parentId !== null && isset($residents[$parentId]),
+            ));
+
+            if ($resident->spouse_id !== null && isset($residents[$resident->spouse_id])) {
+                $spouses[$resident->id] = $resident->spouse_id;
+            }
+        }
+
+        return new DescribeRelationship($parents, $genders, $spouses);
     }
 
     /**

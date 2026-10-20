@@ -1,15 +1,21 @@
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import {
     Home,
+    List,
+    LocateFixed,
     Maximize,
     Network as NetworkIcon,
+    Search,
     ZoomIn,
     ZoomOut,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { DataSet, Network } from 'vis-network/standalone';
+import type { Edge, Node } from 'vis-network/standalone';
 import { Button } from '@/components/ui/button';
-import { dashboard } from '@/routes';
+import { Input } from '@/components/ui/input';
+import { groupRelatives, pathBetween } from '@/lib/family-tree';
+import { dashboard, familyTree } from '@/routes';
 
 type TreeNode = {
     id: number;
@@ -21,7 +27,21 @@ type TreeNode = {
     household_code: string | null;
     in_household: boolean;
     is_deceased: boolean;
+    /** What this person is to the reference person, like "Second cousin" or "Wife of uncle". */
+    relation: string | null;
+    /** The heading the person is listed under, such as "Second cousins". */
+    relation_group: string | null;
+    /** How far away the person is, for ordering a list. */
+    relation_rank: number | null;
 };
+
+type Reach = 'close' | 'cousins' | 'wide';
+
+const reaches: { value: Reach; label: string }[] = [
+    { value: 'close', label: 'Close family' },
+    { value: 'cousins', label: '+ First cousins' },
+    { value: 'wide', label: '+ Second cousins' },
+];
 
 type TreeEdge = { from: number; to: number; kind: 'parent' | 'spouse' };
 
@@ -33,7 +53,16 @@ type Props = {
         barangay_name: string;
         head_name: string | null;
     };
-    tree: { nodes: TreeNode[]; edges: TreeEdge[]; truncated: boolean };
+    tree: {
+        nodes: TreeNode[];
+        edges: TreeEdge[];
+        truncated: boolean;
+        /** Whether relatives, and not only distant husbands and wives, were left out to keep the tree readable. */
+        truncated_relatives: boolean;
+        /** The person the relationship labels are given from, usually the head of the household. */
+        reference: { id: number; name: string } | null;
+        reach: Reach;
+    };
 };
 
 const colours = {
@@ -344,14 +373,227 @@ function arrange(
     return positions;
 }
 
+/** Below this zoom a name is too small to read, so the tree opens on the household instead of on everyone. */
+const READABLE_SCALE = 0.55;
+
+/** The drawn tree, kept so a person's family line can be lit up without drawing it again. */
+type Drawing = {
+    nodes: DataSet<Node>;
+    edges: DataSet<Edge>;
+    personIds: number[];
+    junctionIds: string[];
+    /** The parent and child pairs each line stands for, to tell which lines are on a path. */
+    pairs: Map<number, [number, number][]>;
+    colours: Map<number, string>;
+    junctionOf: Map<number, string>;
+};
+
+/**
+ * Lights up the line of people from the reference person to the chosen one and fades everyone else. With no path
+ * everything goes back to normal.
+ */
+function highlight(drawing: Drawing | null, path: number[] | null) {
+    if (drawing === null) {
+        return;
+    }
+
+    const lit = new Set(path ?? []);
+    const steps = new Set<string>();
+
+    for (let index = 1; index < (path?.length ?? 0); index++) {
+        const [a, b] = [path![index - 1], path![index]];
+
+        steps.add(`${a}-${b}`);
+        steps.add(`${b}-${a}`);
+    }
+
+    const faded = path !== null && path.length > 1;
+    const litLines = new Set<number>();
+
+    for (const [id, pairs] of drawing.pairs) {
+        if (pairs.some(([a, b]) => steps.has(`${a}-${b}`))) {
+            litLines.add(id);
+        }
+    }
+
+    const litJunctions = new Set(
+        [...litLines].map((id) => drawing.junctionOf.get(id)),
+    );
+
+    drawing.nodes.update([
+        ...drawing.personIds.map((id) => ({
+            id,
+            opacity: !faded || lit.has(id) ? 1 : 0.22,
+        })),
+        ...drawing.junctionIds.map((id) => ({
+            id,
+            opacity: !faded || litJunctions.has(id) ? 1 : 0.22,
+        })),
+    ]);
+    drawing.edges.update(
+        [...drawing.colours].map(([id, colour]) => ({
+            id,
+            width: faded && litLines.has(id) ? 4 : 1,
+            color: {
+                color: faded && litLines.has(id) ? '#0f172a' : colour,
+                opacity: !faded || litLines.has(id) ? 1 : 0.12,
+            },
+        })),
+    );
+}
+
+/** Brings the household and the people closest to it into view at a size that can be read. */
+function focusHousehold(instance: Network, tree: Props['tree']) {
+    const members = tree.nodes
+        .filter((node) => node.in_household)
+        .map((node) => node.id);
+    const ring = new Set(members);
+
+    for (const edge of tree.edges) {
+        if (members.includes(edge.from)) {
+            ring.add(edge.to);
+        }
+
+        if (members.includes(edge.to)) {
+            ring.add(edge.from);
+        }
+    }
+
+    instance.fit({ nodes: [...ring], maxZoomLevel: 1, animation: false });
+
+    if (instance.getScale() < READABLE_SCALE && ring.size > members.length) {
+        instance.fit({ nodes: members, maxZoomLevel: 1, animation: false });
+    }
+}
+
+/** The relatives of the reference person as a list, grouped from the closest to the furthest. */
+function RelativesList({
+    tree,
+    search,
+    onSearch,
+    selectedId,
+    onSelect,
+}: {
+    tree: Props['tree'];
+    search: string;
+    onSearch: (value: string) => void;
+    selectedId: number | null;
+    onSelect: (id: number) => void;
+}) {
+    const groups = groupRelatives(
+        tree.nodes,
+        tree.reference?.id ?? null,
+        search,
+    );
+    const count = groups.reduce((sum, group) => sum + group.people.length, 0);
+
+    return (
+        <section className="grid gap-3" aria-label="Relatives list">
+            <div className="relative">
+                <Search className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                    type="search"
+                    autoComplete="off"
+                    className="pl-10"
+                    aria-label="Find a relative"
+                    placeholder="Find a name or relationship"
+                    value={search}
+                    onChange={(event) => onSearch(event.target.value)}
+                />
+            </div>
+            <p className="text-base text-muted-foreground">
+                {count} {count === 1 ? 'person' : 'people'}
+                {tree.reference
+                    ? `, grouped by how they are related to ${tree.reference.name}.`
+                    : '.'}
+            </p>
+
+            {groups.length === 0 && (
+                <p className="rounded-xl border-2 border-slate-200 p-4 text-lg dark:border-border">
+                    No one matches.
+                </p>
+            )}
+
+            {groups.map((group) => (
+                <details
+                    key={group.name}
+                    open={
+                        search.trim() !== '' ||
+                        group.rank <= 2 ||
+                        group.people.length <= 8
+                    }
+                    className="rounded-xl border-2 border-slate-200 dark:border-border"
+                >
+                    <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 text-lg font-bold">
+                        {group.name}
+                        <span className="rounded-md bg-blue-600 px-2 py-0.5 text-sm font-bold text-white">
+                            {group.people.length}
+                        </span>
+                    </summary>
+                    <ul className="border-t-2 border-slate-100 dark:border-border">
+                        {group.people.map((person) => (
+                            <li
+                                key={person.id}
+                                className="border-b border-slate-100 last:border-b-0 dark:border-border"
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => onSelect(person.id)}
+                                    aria-pressed={selectedId === person.id}
+                                    className={`flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-4 py-2.5 text-left hover:bg-sky-50 dark:hover:bg-sidebar ${
+                                        selectedId === person.id
+                                            ? 'bg-sky-50 dark:bg-sidebar'
+                                            : ''
+                                    }`}
+                                >
+                                    <span className="font-semibold">
+                                        {person.name}
+                                        {person.is_deceased ? ' †' : ''}
+                                    </span>
+                                    <span className="text-sm text-muted-foreground">
+                                        {person.relation !== group.name &&
+                                        person.relation &&
+                                        !group.name
+                                            .toLowerCase()
+                                            .startsWith(
+                                                person.relation.toLowerCase(),
+                                            )
+                                            ? `${person.relation} · `
+                                            : ''}
+                                        born {person.birth_year}
+                                        {person.in_household
+                                            ? ' · lives here'
+                                            : person.barangay_name
+                                              ? ` · ${person.barangay_name}`
+                                              : ''}
+                                    </span>
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                </details>
+            ))}
+        </section>
+    );
+}
+
 export default function FamilyTree({ household, tree }: Props) {
     const container = useRef<HTMLDivElement>(null);
     const network = useRef<Network | null>(null);
+    const drawing = useRef<Drawing | null>(null);
+    /** A person to bring into view as soon as the tree has been drawn, such as one chosen in the list. */
+    const showNext = useRef<number | null>(null);
+    const [view, setView] = useState<'tree' | 'list'>(() =>
+        typeof window !== 'undefined' && window.innerWidth < 768
+            ? 'list'
+            : 'tree',
+    );
     const [selectedId, setSelectedId] = useState<number | null>(null);
+    const [search, setSearch] = useState('');
     const selected = tree.nodes.find((node) => node.id === selectedId) ?? null;
 
     useEffect(() => {
-        if (container.current === null) {
+        if (view !== 'tree' || container.current === null) {
             return;
         }
 
@@ -370,10 +612,10 @@ export default function FamilyTree({ household, tree }: Props) {
             })),
         ]);
         const position = arrange(tree, level, grouped);
-        const people = tree.nodes.map((node) => ({
+        const people: Node[] = tree.nodes.map((node) => ({
             id: node.id,
             ...position.get(node.id),
-            label: `${node.name}\n${node.birth_year}${node.is_deceased ? ' †' : ''}`,
+            label: `${node.name}\n${node.birth_year}${node.is_deceased ? ' †' : ''}${node.relation ? `\n${node.relation}` : ''}`,
             shape: 'box',
             widthConstraint: { minimum: BOX_WIDTH, maximum: BOX_WIDTH },
             color: nodeColour(node.gender),
@@ -384,7 +626,7 @@ export default function FamilyTree({ household, tree }: Props) {
             font: { size: 16, color: '#0f172a', face: 'sans-serif' },
             margin: { top: 10, right: 12, bottom: 10, left: 12 },
         }));
-        const junctions = grouped.unions.map((union) => ({
+        const junctions: Node[] = grouped.unions.map((union) => ({
             id: union.id,
             ...position.get(union.id),
             shape: 'dot',
@@ -393,38 +635,76 @@ export default function FamilyTree({ household, tree }: Props) {
             color: { background: '#64748b', border: '#64748b' },
             label: '',
         }));
-        const nodes = new DataSet([...people, ...junctions]);
+        const nodes = new DataSet<Node>([...people, ...junctions]);
         const down = {
             enabled: true,
             type: 'cubicBezier',
             forceDirection: 'vertical',
             roundness: 0.5,
         };
-        const links = [
+        const grey = '#64748b';
+        const pink = '#be185d';
+        const lines: {
+            line: Edge;
+            colour: string;
+            pairs: [number, number][];
+            junction?: string;
+        }[] = [
             ...grouped.unions.flatMap((union) => {
-                const look = married.has(union.id)
-                    ? { dashes: true, color: { color: '#be185d' } }
-                    : { color: { color: '#64748b' } };
+                const colour = married.has(union.id) ? pink : grey;
+                const style = married.has(union.id) ? { dashes: true } : {};
+                const [first, second] = union.parents;
+                // A line to the junction stands for the couple, and for each child of the couple.
+                const side = (parent: number) => ({
+                    line: {
+                        from: parent,
+                        to: union.id,
+                        ...style,
+                        color: { color: colour },
+                    },
+                    colour,
+                    pairs: [
+                        [first, second],
+                        ...union.children.map((child): [number, number] => [
+                            parent,
+                            child,
+                        ]),
+                    ] as [number, number][],
+                    junction: union.id,
+                });
 
                 return [
-                    { from: union.parents[0], to: union.id, ...look },
-                    { from: union.parents[1], to: union.id, ...look },
+                    side(first),
+                    side(second),
                     ...union.children.map((child) => ({
-                        from: union.id,
-                        to: child,
-                        arrows: 'to',
-                        color: { color: '#64748b' },
-                        smooth: down,
+                        line: {
+                            from: union.id,
+                            to: child,
+                            arrows: 'to',
+                            color: { color: grey },
+                            smooth: down,
+                        },
+                        colour: grey,
+                        pairs: [
+                            [first, child],
+                            [second, child],
+                        ] as [number, number][],
+                        junction: union.id,
                     })),
                 ];
             }),
             ...grouped.single.map((edge) => ({
-                from: edge.from,
-                to: edge.to,
-                arrows: 'to',
-                color: { color: '#64748b' },
-                smooth: down,
+                line: {
+                    from: edge.from,
+                    to: edge.to,
+                    arrows: 'to',
+                    color: { color: grey },
+                    smooth: down,
+                },
+                colour: grey,
+                pairs: [[edge.from, edge.to]] as [number, number][],
             })),
+            // A married pair with children is drawn through its junction, so this line is only for the others.
             ...tree.edges
                 .filter(
                     (edge) =>
@@ -436,13 +716,43 @@ export default function FamilyTree({ household, tree }: Props) {
                         ),
                 )
                 .map((edge) => ({
-                    from: edge.from,
-                    to: edge.to,
-                    dashes: true,
-                    color: { color: '#be185d' },
+                    line: {
+                        from: edge.from,
+                        to: edge.to,
+                        dashes: true,
+                        color: { color: pink },
+                    },
+                    colour: pink,
+                    pairs: [[edge.from, edge.to]] as [number, number][],
                 })),
-        ].map((link, index) => ({ id: index, smooth: false, ...link }));
-        const edges = new DataSet(links);
+        ];
+        const items: Edge[] = lines.map((entry, index) => ({
+            id: index,
+            smooth: false,
+            ...entry.line,
+        }));
+        const edges = new DataSet<Edge>(items);
+        const pairs = new Map<number, [number, number][]>();
+        const colours = new Map<number, string>();
+        const junctionOf = new Map<number, string>();
+
+        lines.forEach((entry, index) => {
+            pairs.set(index, entry.pairs);
+            colours.set(index, entry.colour);
+
+            if (entry.junction) {
+                junctionOf.set(index, entry.junction);
+            }
+        });
+        drawing.current = {
+            nodes,
+            edges,
+            personIds: tree.nodes.map((node) => node.id),
+            junctionIds: grouped.unions.map((union) => union.id),
+            pairs,
+            colours,
+            junctionOf,
+        };
 
         const instance = new Network(
             container.current,
@@ -453,7 +763,19 @@ export default function FamilyTree({ household, tree }: Props) {
             },
         );
 
-        instance.once('afterDrawing', () => instance.fit());
+        instance.once('afterDrawing', () => {
+            const target = showNext.current;
+
+            showNext.current = null;
+            instance.fit();
+
+            if (target !== null) {
+                instance.focus(target, { scale: 0.9, animation: false });
+                instance.selectNodes([target]);
+            } else if (instance.getScale() < READABLE_SCALE) {
+                focusHousehold(instance, tree);
+            }
+        });
 
         instance.on('selectNode', (event: { nodes: (number | string)[] }) => {
             const id = event.nodes[0];
@@ -466,8 +788,21 @@ export default function FamilyTree({ household, tree }: Props) {
         return () => {
             instance.destroy();
             network.current = null;
+            drawing.current = null;
         };
-    }, [tree]);
+    }, [tree, view]);
+
+    // Light up how the chosen person is related to the reference person.
+    useEffect(() => {
+        const path =
+            tree.reference !== null &&
+            selectedId !== null &&
+            selectedId !== tree.reference.id
+                ? pathBetween(tree.edges, tree.reference.id, selectedId)
+                : null;
+
+        highlight(drawing.current, path);
+    }, [selectedId, tree, view]);
 
     function zoom(factor: number) {
         const instance = network.current;
@@ -478,6 +813,22 @@ export default function FamilyTree({ household, tree }: Props) {
                 animation: true,
             });
         }
+    }
+
+    /** Chooses a person, and brings them into view on the tree when it is showing. */
+    function choose(id: number) {
+        setSelectedId(id);
+
+        if (view === 'tree' && network.current) {
+            network.current.selectNodes([id]);
+            network.current.focus(id, { scale: 0.9, animation: true });
+        }
+    }
+
+    function showOnTree(id: number) {
+        showNext.current = id;
+        setSelectedId(id);
+        setView('tree');
     }
 
     const members = tree.nodes.filter((node) => node.in_household);
@@ -510,69 +861,192 @@ export default function FamilyTree({ household, tree }: Props) {
                     </p>
                 ) : (
                     <>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Button variant="outline" onClick={() => zoom(1.3)}>
-                                <ZoomIn />
-                                Zoom in
-                            </Button>
-                            <Button
-                                variant="outline"
-                                onClick={() => zoom(1 / 1.3)}
+                        <div className="grid gap-2">
+                            <p className="text-base font-semibold">
+                                How far to show
+                            </p>
+                            <div
+                                role="group"
+                                aria-label="How far the family tree reaches"
+                                className="flex flex-wrap gap-2"
                             >
-                                <ZoomOut />
-                                Zoom out
-                            </Button>
-                            <Button
-                                variant="outline"
-                                onClick={() =>
-                                    network.current?.fit({ animation: true })
-                                }
-                            >
-                                <Maximize />
-                                Fit all
-                            </Button>
-                            <span className="text-base text-muted-foreground">
-                                Drag to move, scroll to zoom, click a person for
-                                details.
-                            </span>
+                                {reaches.map((option) => (
+                                    <Button
+                                        key={option.value}
+                                        variant={
+                                            tree.reach === option.value
+                                                ? 'default'
+                                                : 'outline'
+                                        }
+                                        aria-pressed={
+                                            tree.reach === option.value
+                                        }
+                                        onClick={() =>
+                                            router.get(
+                                                familyTree(
+                                                    household.id,
+                                                    option.value === 'close'
+                                                        ? {}
+                                                        : {
+                                                              query: {
+                                                                  reach: option.value,
+                                                              },
+                                                          },
+                                                ).url,
+                                                {},
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        {option.label}
+                                    </Button>
+                                ))}
+                            </div>
+                            <p className="text-base text-muted-foreground">
+                                {tree.nodes.length} people.{' '}
+                                {tree.reach === 'close'
+                                    ? 'Parents, grandparents, brothers and sisters, aunts and uncles, and children.'
+                                    : tree.reach === 'cousins'
+                                      ? 'Adds first cousins. Beyond close family only blood relatives are followed.'
+                                      : 'Adds second cousins, who share great-grandparents. Beyond close family only blood relatives are followed.'}
+                                {tree.reference &&
+                                    ` Each person is labelled by how they are related to ${tree.reference.name}.`}
+                            </p>
                         </div>
 
                         <div
-                            ref={container}
-                            className="h-[60vh] min-h-96 w-full rounded-xl border-2 border-blue-200 bg-white dark:border-sidebar-border"
-                            role="img"
-                            aria-label={`Family tree of household ${household.household_code} with ${tree.nodes.length} people`}
-                        />
-
-                        <ul className="flex flex-wrap gap-x-5 gap-y-2 text-base">
-                            <li className="flex items-center gap-2">
-                                <span className="size-4 rounded border-2 border-blue-700 bg-blue-200" />
-                                Male
-                            </li>
-                            <li className="flex items-center gap-2">
-                                <span className="size-4 rounded border-2 border-pink-700 bg-pink-200" />
-                                Female
-                            </li>
-                            <li className="flex items-center gap-2">
-                                <span className="size-4 rounded border-4 border-slate-700" />
-                                Lives in this household
-                            </li>
-                            <li className="flex items-center gap-2">
-                                <span className="h-0 w-6 border-t-2 border-dashed border-pink-700" />
-                                Married
-                            </li>
-                            <li className="flex items-center gap-2">
-                                <span className="size-4 rounded border-2 border-dashed border-slate-500" />
-                                Listed, not registered yet
-                            </li>
-                            <li>† Deceased</li>
-                        </ul>
+                            role="group"
+                            aria-label="How to show the family"
+                            className="flex flex-wrap gap-2"
+                        >
+                            <Button
+                                variant={
+                                    view === 'tree' ? 'default' : 'outline'
+                                }
+                                aria-pressed={view === 'tree'}
+                                onClick={() => setView('tree')}
+                            >
+                                <NetworkIcon />
+                                Tree
+                            </Button>
+                            <Button
+                                variant={
+                                    view === 'list' ? 'default' : 'outline'
+                                }
+                                aria-pressed={view === 'list'}
+                                onClick={() => setView('list')}
+                            >
+                                <List />
+                                Relatives list
+                            </Button>
+                        </div>
 
                         {tree.truncated && (
-                            <p className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-base text-amber-950">
-                                This family is large, so only the closest
-                                relatives are shown.
+                            <p
+                                role="status"
+                                className="rounded-xl border-2 border-amber-300 bg-amber-50 p-3 text-base text-amber-950"
+                            >
+                                {tree.truncated_relatives
+                                    ? `This family is large, so some relatives are not shown (${tree.nodes.length} people are).${
+                                          tree.reach === 'wide'
+                                              ? ''
+                                              : ' Choose a shorter reach to see fewer people.'
+                                      }`
+                                    : 'Some husbands and wives of distant relatives are not shown, to keep the tree readable.'}
                             </p>
+                        )}
+
+                        {view === 'tree' ? (
+                            <>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => zoom(1.3)}
+                                    >
+                                        <ZoomIn />
+                                        Zoom in
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => zoom(1 / 1.3)}
+                                    >
+                                        <ZoomOut />
+                                        Zoom out
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() =>
+                                            network.current &&
+                                            focusHousehold(
+                                                network.current,
+                                                tree,
+                                            )
+                                        }
+                                    >
+                                        <LocateFixed />
+                                        Focus on household
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() =>
+                                            network.current?.fit({
+                                                animation: true,
+                                            })
+                                        }
+                                    >
+                                        <Maximize />
+                                        Fit all
+                                    </Button>
+                                </div>
+                                <p className="text-base text-muted-foreground">
+                                    Drag to move, scroll to zoom. Click a person
+                                    to see how they are related
+                                    {tree.reference
+                                        ? ` to ${tree.reference.name}`
+                                        : ''}
+                                    : their family line lights up and everyone
+                                    else fades.
+                                </p>
+
+                                <div
+                                    ref={container}
+                                    className="h-[60vh] min-h-96 w-full rounded-xl border-2 border-blue-200 bg-white dark:border-sidebar-border"
+                                    role="img"
+                                    aria-label={`Family tree of household ${household.household_code} with ${tree.nodes.length} people`}
+                                />
+
+                                <ul className="flex flex-wrap gap-x-5 gap-y-2 text-base">
+                                    <li className="flex items-center gap-2">
+                                        <span className="size-4 rounded border-2 border-blue-700 bg-blue-200" />
+                                        Male
+                                    </li>
+                                    <li className="flex items-center gap-2">
+                                        <span className="size-4 rounded border-2 border-pink-700 bg-pink-200" />
+                                        Female
+                                    </li>
+                                    <li className="flex items-center gap-2">
+                                        <span className="size-4 rounded border-4 border-slate-700" />
+                                        Lives in this household
+                                    </li>
+                                    <li className="flex items-center gap-2">
+                                        <span className="h-0 w-6 border-t-2 border-dashed border-pink-700" />
+                                        Married
+                                    </li>
+                                    <li className="flex items-center gap-2">
+                                        <span className="size-4 rounded border-2 border-dashed border-slate-500" />
+                                        Listed, not registered yet
+                                    </li>
+                                    <li>† Deceased</li>
+                                </ul>
+                            </>
+                        ) : (
+                            <RelativesList
+                                tree={tree}
+                                search={search}
+                                onSearch={setSearch}
+                                selectedId={selectedId}
+                                onSelect={choose}
+                            />
                         )}
 
                         {selected && (
@@ -580,6 +1054,15 @@ export default function FamilyTree({ household, tree }: Props) {
                                 <h2 className="text-xl font-bold">
                                     {selected.name}
                                 </h2>
+                                {tree.reference && (
+                                    <p className="font-semibold text-blue-800 dark:text-sky-300">
+                                        {selected.id === tree.reference.id
+                                            ? 'The labels on this tree are given from this person.'
+                                            : selected.relation
+                                              ? `${selected.relation} of ${tree.reference.name}`
+                                              : `No family link to ${tree.reference.name} is recorded in this tree.`}
+                                    </p>
+                                )}
                                 <p>
                                     {selected.gender} · born{' '}
                                     {selected.birth_year} · {selected.status}
@@ -599,6 +1082,16 @@ export default function FamilyTree({ household, tree }: Props) {
                                             Lives in another household.
                                         </p>
                                     )}
+                                {view === 'list' && (
+                                    <Button
+                                        variant="outline"
+                                        className="mt-2 w-fit"
+                                        onClick={() => showOnTree(selected.id)}
+                                    >
+                                        <NetworkIcon />
+                                        Show on the tree
+                                    </Button>
+                                )}
                             </section>
                         )}
 
@@ -612,19 +1105,7 @@ export default function FamilyTree({ household, tree }: Props) {
                                         <button
                                             type="button"
                                             className="text-left underline-offset-2 hover:underline"
-                                            onClick={() => {
-                                                setSelectedId(member.id);
-                                                network.current?.selectNodes([
-                                                    member.id,
-                                                ]);
-                                                network.current?.focus(
-                                                    member.id,
-                                                    {
-                                                        scale: 1,
-                                                        animation: true,
-                                                    },
-                                                );
-                                            }}
+                                            onClick={() => choose(member.id)}
                                         >
                                             {member.name}
                                         </button>{' '}

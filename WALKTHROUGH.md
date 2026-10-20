@@ -160,7 +160,25 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 
 **Analytics**
 - [ ] Open **Analytics**: only a San Jose row. Pick an event: the coverage changes.
-- [ ] Search a household code in **Households**, then open **Family tree**: a tree with parents above and children below, spouses side by side.
+- [ ] Search a household code in **Households**, then open **Family tree**: a tree with parents above and children below, spouses side by side. Every person has a label under their name (Father, Aunt, Sister...) saying how they are related to the head of the household. Click a person for the full sentence.
+- [ ] Use **How far to show**: **Close family** (the default), **+ First cousins** and **+ Second cousins**. Beyond close family only blood relatives are followed, so a cousin's husband or wife is shown but not their family. Try it on a household whose relatives are all registered.
+- [ ] Switch between **Tree** and **Relatives** (on a phone it opens on **Relatives**). The list groups people (Parents, Children, Brothers and sisters, Cousins...) closest first, with people related by marriage after them. Type in its search box to narrow by name or relationship; choose **Show on the tree** to jump to that person.
+- [ ] The tree opens zoomed on the household, not the whole family. Use **Focus on household** to return and **Fit all** to see everyone.
+- [ ] Click a person: everyone else fades and a dark line shows how they connect to the household.
+- [ ] If the family is too big, a note says some relatives are not shown. It only says so when blood relatives were cut, not just in-laws.
+
+**Household Review (one family recorded in two households)**
+- [ ] Open **Household Review**. A married couple recorded in two households, or a child under 18 living apart from a parent, shows as a pair with the reason in plain words. If your test data has none, record a marriage between two people of different households in B2 first.
+- [ ] Pick a relief event: each household shows whether it claimed. A pair where **both** households claimed turns red and is listed first.
+- [ ] **Mark as reviewed** with no reason: refused. With a reason: the pair moves to the **Reviewed** tab with your name, the date and the reason.
+- [ ] On the **Reviewed** tab choose **Put back on the list**: the pair returns to **To check**.
+- [ ] A pair with one household in another barangay shows that household's code and barangay but not its head, and has no **Family tree** link for it.
+
+**Data Check and Relationship Finder**
+- [ ] Open **Data Check**. With the seed data it says no problems were found.
+- [ ] To see a problem: on a resident's **Update** page set a birthdate that makes a parent younger than the child, or record a marriage on only one person. Reload **Data Check**: the problem is listed in plain words, with **Open** (the person) and **Family tree** buttons. Fix it and reload: it is gone.
+- [ ] Open **Relationship Finder**. Type part of a name or a resident ID in **First person** and pick someone from the list, then do the same for **Second person**. It says what each is to the other, such as 'Ana is Ben's aunt' and 'Ben is Ana's nephew'.
+- [ ] Try two people from different families: it says no family link was found. **Swap the two people** reverses them, and **Change** picks someone else.
 
 **Staff accounts**
 - [ ] Open **Users**: only the encoder(s) of San Jose.
@@ -199,7 +217,10 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 - [ ] As an encoder on the scanner, tick **Someone else is collecting**, leave the fields empty and scan: nothing is recorded and you are told what is missing. Fill in a name, a relationship and the confirmation, then scan: the claim is recorded with who collected it. The box clears for the next person.
 - [ ] Have the same person collect for four residents in one event: the fourth result shows an amber warning.
 - [ ] As an admin or stakeholder, open **Analytics** and use **Claims (CSV)** and **Barangay summary (CSV)**. Expected: Excel opens them, claims show who collected, and the coverage matches the page.
-- [ ] As an encoder or admin, open **Distribution List**: people grouped by household with a signature column, claimed people marked. Tick "Only people who have not claimed yet", then **Print** and **Download CSV**.
+- [ ] As an encoder or admin, open **Distribution List**: people grouped by household with a signature column, claimed people marked, and the totals for the whole barangay at the top.
+- [ ] Type in **Find a person or household** (a name, a resident ID, a household code or a street): it searches by itself after a short pause, and the totals do not change.
+- [ ] With more than 10 households, use **Previous** and **Next** to move between pages. Tick "Only people who have not claimed yet" to shrink the list.
+- [ ] **Print this page** prints what is on screen. **Print all** loads every household on one sheet, ignores the search, and opens the print window. **Download CSV** always holds the whole list.
 
 **Ending a marriage**
 - [ ] On Juan's page (married to Maria), click **End a marriage**, choose Annulled and confirm. Expected: both show Annulled with no spouse, each has a history line, and the children (Pedro) stay linked to both parents.
@@ -235,10 +256,12 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 ---
 
 ## C. Stakeholder (`stakeholder@familink.test`)
-- [ ] After login you land on **Analytics**. The menu shows Dashboard and Analytics only.
+- [ ] After login you land on **Analytics**. The menu shows Dashboard, Analytics, Household Review, Data Check and Relationship Finder only.
 - [ ] All municipalities and barangays appear. The numbers cover everyone.
 - [ ] Pick each event: the coverage figures reflect the claims from Part A.
 - [ ] A household's **Family tree** opens from any barangay.
+- [ ] Open **Household Review**: the same pairs as the admin sees, but there is no **Mark as reviewed** button.
+- [ ] **Data Check** lists the same problems, without the **Open** (person) buttons. **Relationship Finder** works across all barangays.
 - [ ] Nothing here lets you change data.
 
 **Forbidden for this role**

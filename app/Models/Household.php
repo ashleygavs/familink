@@ -60,4 +60,14 @@ class Household extends Model
     {
         return $this->hasMany(Resident::class);
     }
+
+    /**
+     * Relief claimed by members of this household, in every event.
+     *
+     * @return HasMany<ReliefLog, $this>
+     */
+    public function claims(): HasMany
+    {
+        return $this->hasMany(ReliefLog::class);
+    }
 }

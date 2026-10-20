@@ -5,11 +5,14 @@ use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\ApprovalController;
 use App\Http\Controllers\BarangayController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\FamilyDataCheckController;
 use App\Http\Controllers\FamilyRelativesController;
 use App\Http\Controllers\FamilySuggestionController;
 use App\Http\Controllers\FamilyTreeController;
 use App\Http\Controllers\HouseholdController;
+use App\Http\Controllers\HouseholdReviewController;
 use App\Http\Controllers\MunicipalityController;
+use App\Http\Controllers\RelationshipController;
 use App\Http\Controllers\RelativeSuggestionController;
 use App\Http\Controllers\ReliefController;
 use App\Http\Controllers\ReliefEventController;
@@ -46,6 +49,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('approvals/{resident}/links', [ApprovalController::class, 'links'])->name('approvals.links');
         Route::post('approvals/{resident}/unlink', [ApprovalController::class, 'unlink'])->name('approvals.unlink');
         Route::post('approvals/{resident}/feedback', [ApprovalController::class, 'feedback'])->name('approvals.feedback');
+        Route::post('household-reviews', [HouseholdReviewController::class, 'store'])->name('household-reviews.store');
+        Route::delete('household-reviews/{review}', [HouseholdReviewController::class, 'destroy'])->name('household-reviews.destroy');
         Route::get('suggestion-report', SuggestionReportController::class)->name('suggestion-report');
         Route::get('residents/{resident}', [ResidentManagementController::class, 'show'])->name('residents.show');
         Route::get('residents/{resident}/spouse-candidates', [ResidentManagementController::class, 'spouseCandidates'])->name('residents.spouse-candidates');
@@ -80,6 +85,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('reports/analytics', AnalyticsController::class)->name('reports.analytics');
         Route::get('reports/events/{event}/claims.csv', [ReportExportController::class, 'claims'])->name('reports.claims-csv');
         Route::get('reports/events/{event}/coverage.csv', [ReportExportController::class, 'coverage'])->name('reports.coverage-csv');
+        Route::get('reports/household-review', [HouseholdReviewController::class, 'index'])->name('reports.household-review');
+        Route::get('reports/data-check', FamilyDataCheckController::class)->name('reports.data-check');
+        Route::get('reports/relationship', [RelationshipController::class, 'index'])->name('reports.relationship');
+        Route::get('reports/relationship/search', [RelationshipController::class, 'search'])->name('reports.relationship.search');
         Route::get('family-tree/{household}', FamilyTreeController::class)->name('family-tree');
     });
 

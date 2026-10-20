@@ -3,11 +3,14 @@ import {
     Building2,
     CheckCircle2,
     Contact,
+    GitCompareArrows,
     LayoutDashboard,
     Lightbulb,
     ListChecks,
     PackageCheck,
     QrCode,
+    ShieldAlert,
+    SplitSquareHorizontal,
     UserPlus,
     Users,
 } from 'lucide-react';
@@ -21,7 +24,13 @@ import {
     users,
 } from '@/routes/admin';
 import { register, scanner } from '@/routes/encoder';
-import { analytics, distributionList } from '@/routes/reports';
+import {
+    analytics,
+    dataCheck,
+    distributionList,
+    householdReview,
+    relationship,
+} from '@/routes/reports';
 import type { NavItem, RoleName } from '@/types';
 
 export const roleLabels: Record<RoleName, string> = {
@@ -109,6 +118,28 @@ const roleNavItems: RoleNavItem[] = [
         icon: BarChart3,
         description:
             'See how relief reached each barangay, and open family trees.',
+        roles: ['stakeholder', 'admin'],
+    },
+    {
+        title: 'Household Review',
+        href: householdReview(),
+        icon: SplitSquareHorizontal,
+        description:
+            'Check families recorded in two households, so none claims twice.',
+        roles: ['stakeholder', 'admin'],
+    },
+    {
+        title: 'Data Check',
+        href: dataCheck(),
+        icon: ShieldAlert,
+        description: 'Find family records that cannot be right.',
+        roles: ['stakeholder', 'admin'],
+    },
+    {
+        title: 'Relationship Finder',
+        href: relationship(),
+        icon: GitCompareArrows,
+        description: 'See how two residents are related.',
         roles: ['stakeholder', 'admin'],
     },
     {

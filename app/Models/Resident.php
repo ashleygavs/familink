@@ -195,6 +195,27 @@ class Resident extends Model
     }
 
     /**
+     * The relief this resident has claimed, in every event.
+     *
+     * @return HasMany<ReliefLog, $this>
+     */
+    public function claims(): HasMany
+    {
+        return $this->hasMany(ReliefLog::class);
+    }
+
+    /**
+     * Residents who can claim relief: approved and living.
+     *
+     * @param  Builder<Resident>  $query
+     */
+    #[Scope]
+    protected function eligibleForRelief(Builder $query): void
+    {
+        $query->where('status', ResidentStatus::Approved->value)->where('is_deceased', false);
+    }
+
+    /**
      * @return HasMany<RetiredQrCode, $this>
      */
     public function retiredQrCodes(): HasMany
