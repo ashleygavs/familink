@@ -1,5 +1,13 @@
 import { Head, useForm, usePage } from '@inertiajs/react';
-import { Pencil, Plus, Trash2, UserCheck, UserCog, UserX } from 'lucide-react';
+import {
+    History,
+    Pencil,
+    Plus,
+    Trash2,
+    UserCheck,
+    UserCog,
+    UserX,
+} from 'lucide-react';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import UserController from '@/actions/App/Http/Controllers/UserController';
@@ -16,6 +24,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { formatDate } from '@/lib/format';
 import { roleBadgeClasses, roleLabels } from '@/lib/roles';
 import { users as usersRoute } from '@/routes/admin';
 import type { RoleName } from '@/types';
@@ -44,8 +53,18 @@ type MunicipalityOption = {
     barangays: { id: number; name: string }[];
 };
 
+type HistoryLine = {
+    id: number;
+    type: string;
+    target_name: string;
+    summary: string;
+    changed_by: string;
+    changed_at: string | null;
+};
+
 type Props = {
     users: StaffUser[];
+    history: HistoryLine[];
     municipalities: MunicipalityOption[];
     assignableRoles: RoleName[];
 };
@@ -198,7 +217,7 @@ function StaffForm({
                     <span className="text-xl font-bold">
                         {automaticName ?? 'Choose the barangay below first'}
                     </span>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-base text-muted-foreground">
                         Made from the municipality, barangay and role.
                     </span>
                 </div>
@@ -348,6 +367,7 @@ function StaffForm({
 
 export default function Users({
     users,
+    history,
     municipalities,
     assignableRoles,
 }: Props) {
@@ -412,13 +432,13 @@ export default function Users({
                                         {user.name}
                                         {user.role && (
                                             <span
-                                                className={`rounded-md px-2 py-0.5 text-sm font-bold ${roleBadgeClasses[user.role]}`}
+                                                className={`rounded-md px-2 py-0.5 text-base font-bold ${roleBadgeClasses[user.role]}`}
                                             >
                                                 {roleLabels[user.role]}
                                             </span>
                                         )}
                                         {!user.active && (
-                                            <span className="rounded-md bg-amber-500 px-2 py-0.5 text-sm font-bold text-black">
+                                            <span className="rounded-md bg-amber-500 px-2 py-0.5 text-base font-bold text-black">
                                                 Inactive
                                             </span>
                                         )}
@@ -430,7 +450,7 @@ export default function Users({
                                         {placeOf(user)}
                                     </span>
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2">
                                     {user.can_edit && (
                                         <Button
                                             variant="outline"
@@ -487,6 +507,38 @@ export default function Users({
                         ))}
                     </ul>
                 )}
+
+                <section className="grid gap-3" aria-label="Account history">
+                    <h2 className="flex items-center gap-2 text-2xl font-bold text-blue-900 dark:text-white">
+                        <History className="size-6 text-blue-600" />
+                        Recent account changes
+                    </h2>
+                    {history.length === 0 ? (
+                        <p className="text-lg text-muted-foreground">
+                            Nothing has been changed yet.
+                        </p>
+                    ) : (
+                        <ul className="grid gap-2">
+                            {history.map((line) => (
+                                <li
+                                    key={line.id}
+                                    className="rounded-xl border-2 border-slate-200 p-4 dark:border-border"
+                                >
+                                    <p className="text-lg font-semibold">
+                                        {line.target_name}
+                                    </p>
+                                    <p className="text-lg">{line.summary}</p>
+                                    <p className="text-base text-muted-foreground">
+                                        {line.changed_by}
+                                        {line.changed_at
+                                            ? ` · ${formatDate(line.changed_at)}`
+                                            : ''}
+                                    </p>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </section>
             </div>
 
             <Dialog open={formOpen} onOpenChange={setFormOpen}>

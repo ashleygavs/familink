@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Relief\RecordUserChange;
 use App\Enums\RoleName;
 use App\Http\Requests\SaveUserRequest;
 use App\Models\Barangay;
 use App\Models\Municipality;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\UserChange;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -68,25 +70,49 @@ class UserController extends Controller
                     'barangays' => $municipality->barangays->map(fn (Barangay $barangay): array => ['id' => $barangay->id, 'name' => $barangay->name])->all(),
                 ])->values(),
             'assignableRoles' => $actor->hasRole(RoleName::SuperAdmin) ? RoleName::values() : [RoleName::User->value],
+            'history' => UserChange::query()
+                ->with('changedBy')
+                ->when($barangayIds !== null, fn ($query) => $query->whereIn('barangay_id', $barangayIds))
+                ->latest('id')
+                ->limit(30)
+                ->get()
+                ->map(fn (UserChange $change): array => [
+                    'id' => $change->id,
+                    'type' => $change->type,
+                    'target_name' => $change->target_name,
+                    'summary' => $change->summary,
+                    'changed_by' => $change->changedBy->name,
+                    'changed_at' => $change->created_at?->toIso8601String(),
+                ])
+                ->values(),
         ]);
     }
 
-    public function store(SaveUserRequest $request): RedirectResponse
+    public function store(SaveUserRequest $request, RecordUserChange $record): RedirectResponse
     {
         $user = new User;
-        $this->save($user, $request);
+
+        DB::transaction(function () use ($user, $request, $record): void {
+            $this->save($user, $request);
+            $record->created($request->user(), $user);
+        });
 
         return back()->with('success', "Account created for {$user->name}.");
     }
 
-    public function update(SaveUserRequest $request, User $user): RedirectResponse
+    public function update(SaveUserRequest $request, User $user, RecordUserChange $record): RedirectResponse
     {
-        $this->save($user, $request);
+        DB::transaction(function () use ($user, $request, $record): void {
+            $before = $record->snapshot($user);
+
+            $this->save($user, $request);
+            $record->updated($request->user(), $user, $before, ! empty($request->validated('password')));
+        });
 
         return back()->with('success', "Account updated for {$user->name}.");
     }
 
-    public function deactivate(User $user): RedirectResponse
+    public function deactivate(Request $request, User $user, RecordUserChange $record): RedirectResponse
     {
         Gate::authorize('deactivate', $user);
 
@@ -99,15 +125,17 @@ class UserController extends Controller
         }
 
         $user->forceFill(['deactivated_at' => Carbon::now()])->save();
+        $record->deactivated($request->user(), $user);
 
         return back()->with('success', "{$user->name} was deactivated and can no longer sign in.");
     }
 
-    public function reactivate(User $user): RedirectResponse
+    public function reactivate(Request $request, User $user, RecordUserChange $record): RedirectResponse
     {
         Gate::authorize('reactivate', $user);
 
         $user->forceFill(['deactivated_at' => null])->save();
+        $record->reactivated($request->user(), $user);
 
         return back()->with('success', "{$user->name} can sign in again.");
     }
@@ -116,7 +144,7 @@ class UserController extends Controller
      * Deleting is only for accounts made by mistake. Anyone with approvals, scans, events or recorded
      * answers is deactivated instead, so the history keeps its author.
      */
-    public function destroy(User $user): RedirectResponse
+    public function destroy(Request $request, User $user, RecordUserChange $record): RedirectResponse
     {
         Gate::authorize('delete', $user);
 
@@ -124,6 +152,7 @@ class UserController extends Controller
             return back()->withErrors(['user' => "{$user->name} has records, so deactivate the account instead of deleting it."]);
         }
 
+        $record->deleted($request->user(), $user);
         $user->delete();
 
         return back()->with('success', "Account deleted for {$user->name}.");

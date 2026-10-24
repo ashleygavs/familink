@@ -1,5 +1,6 @@
 import { Head } from '@inertiajs/react';
 import {
+    Camera,
     CheckCircle2,
     Keyboard,
     PackageX,
@@ -34,6 +35,9 @@ type OpenEvent = {
 
 /** Seconds the result stays on screen before the scanner is ready for the next person. */
 const RESET_SECONDS = 4;
+
+/** A card seen again within this many seconds of its last sighting is the same card still held up, not a new scan. */
+const SAME_CARD_SECONDS = 6;
 
 function ResultScreen({
     result,
@@ -122,6 +126,7 @@ export default function QRScanner({
     const [manualCode, setManualCode] = useState('');
     const [counts, setCounts] = useState({ approved: 0, denied: 0 });
     const busy = useRef(false);
+    const lastCameraScan = useRef<{ code: string; at: number } | null>(null);
     const event = events.find(
         (candidate) => candidate.id.toString() === eventId,
     );
@@ -176,6 +181,8 @@ export default function QRScanner({
             }));
         } catch (caught) {
             busy.current = false;
+            // Nothing was recorded, so the same card may be tried again at once.
+            lastCameraScan.current = null;
             setProblem(
                 caught instanceof Error
                     ? caught.message
@@ -211,10 +218,27 @@ export default function QRScanner({
         return () => window.clearInterval(timer);
     }, [result]);
 
-    const { error: cameraError } = useQrScanner(
+    // The camera keeps seeing the same card while it is held up, so a card seen again within a few seconds is ignored.
+    // Otherwise a person who was just approved would be scanned again and shown a red "already claimed".
+    function scanFromCamera(code: string) {
+        const last = lastCameraScan.current;
+        lastCameraScan.current = { code, at: Date.now() };
+
+        if (
+            last !== null &&
+            last.code === code &&
+            Date.now() - last.at < SAME_CARD_SECONDS * 1000
+        ) {
+            return;
+        }
+
+        void check(code);
+    }
+
+    const { error: cameraError, restart: restartCamera } = useQrScanner(
         'qr-reader',
         event !== undefined,
-        (code) => void check(code),
+        scanFromCamera,
     );
 
     function submitManual(formEvent: FormEvent) {
@@ -358,9 +382,22 @@ export default function QRScanner({
                         <div className="overflow-hidden rounded-xl border-2 border-blue-200 dark:border-sidebar-border">
                             <div id="qr-reader" className="min-h-64 w-full" />
                             {cameraError && (
-                                <p className="p-4 text-base font-semibold text-red-700">
-                                    {cameraError}
-                                </p>
+                                <div className="grid gap-3 p-4">
+                                    <p
+                                        role="alert"
+                                        className="text-base font-semibold text-red-700"
+                                    >
+                                        {cameraError}
+                                    </p>
+                                    <Button
+                                        variant="outline"
+                                        className="min-h-12 text-lg"
+                                        onClick={restartCamera}
+                                    >
+                                        <Camera className="size-5" />
+                                        Restart camera
+                                    </Button>
+                                </div>
                             )}
                         </div>
 

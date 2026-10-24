@@ -186,6 +186,8 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 - [ ] **Add account**: another encoder for San Jose. Role choices offered: Encoder only, and only San Jose as the barangay.
 - [ ] Try to give that new account a barangay in Cabalantian or Lubao. Expected: not offered or refused.
 - [ ] **Deactivate** an encoder, confirm. Expected: "Inactive" label. In the encoder's browser, the next click logs them out, and logging in again says the account is deactivated.
+- [ ] At the bottom of **Users**, **Recent account changes** lists each change with who made it and when. After the steps above you see the creation, the deactivation and the reactivation. Changing an encoder's barangay shows 'Barangay from X to Y'. Setting a password only says 'A new password was set', never the password itself.
+- [ ] An account that has made changes cannot be deleted, only deactivated, so the history keeps its author.
 - [ ] **Reactivate** them. Expected: they can log in again.
 - [ ] You cannot see or edit admins or super admins here.
 
@@ -316,6 +318,8 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 ## F. Camera scanning (when you are ready)
 - [ ] Follow "Phone setup" below, open **Scan QR Code**, and scan a card shown on the PC screen (http://localhost:8000/households/1/cards).
 - [ ] Expected: green APPROVED for the first member, red for the second member of the same household.
+- [ ] Hold the same card in front of the camera after it is approved. Expected: no second red 'already claimed' flash while the card stays in view. Scanning a different card works at once.
+- [ ] While the camera is on, switch the phone off and on again, or open another app that uses the camera. Back in FamiLink an 'The camera stopped' message appears with a **Restart camera** button, and typing the resident ID still works.
 - [ ] Log out in another tab, then scan. Expected: a plain message saying you were signed out and to reload, not a technical error.
 
 ---
