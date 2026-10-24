@@ -231,12 +231,12 @@ export default function Residents({ residents, filters, places }: Props) {
                                     <span className="flex flex-wrap items-center gap-2 text-xl font-bold">
                                         {resident.full_name}
                                         {resident.status === 'Pending' && (
-                                            <span className="rounded-md bg-amber-500 px-2 py-0.5 text-sm font-bold text-black">
+                                            <span className="rounded-md bg-amber-500 px-2 py-0.5 text-base font-bold text-black">
                                                 Waiting for approval
                                             </span>
                                         )}
                                         {resident.is_deceased && (
-                                            <span className="rounded-md bg-slate-700 px-2 py-0.5 text-sm font-bold text-white">
+                                            <span className="rounded-md bg-slate-700 px-2 py-0.5 text-base font-bold text-white">
                                                 Deceased
                                             </span>
                                         )}

@@ -15,7 +15,7 @@ export function ResidentQrCard({
         <div
             className={`flex flex-col items-center gap-2 rounded-xl border-2 border-slate-300 bg-white p-4 text-center text-slate-900 ${className}`}
         >
-            <p className="text-sm font-semibold tracking-wide text-blue-700 uppercase">
+            <p className="text-base font-semibold tracking-wide text-blue-700 uppercase">
                 FamiLink Resident QR
             </p>
             <QRCodeSVG

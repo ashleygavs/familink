@@ -269,7 +269,7 @@ function HistoryList({ lines }: { lines: HistoryLine[] }) {
                     className="rounded-lg border-2 border-slate-200 p-3 dark:border-border"
                 >
                     <p className="font-semibold">{line.summary}</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-base text-muted-foreground">
                         {line.changed_by}
                         {line.changed_at
                             ? ` · ${formatDate(line.changed_at)}`
@@ -365,12 +365,12 @@ export default function ReliefEvents({
                                         <span className="flex flex-wrap items-center gap-2 text-xl font-bold">
                                             {event.title}
                                             <span
-                                                className={`rounded-md px-2 py-0.5 text-sm font-bold ${statusClasses[event.status]}`}
+                                                className={`rounded-md px-2 py-0.5 text-base font-bold ${statusClasses[event.status]}`}
                                             >
                                                 {event.status}
                                             </span>
                                             {event.is_open && (
-                                                <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-sm font-bold text-emerald-900">
+                                                <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-base font-bold text-emerald-900">
                                                     Open for scanning
                                                 </span>
                                             )}

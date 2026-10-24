@@ -133,13 +133,13 @@ function ClaimStatus({
         const detail = claimDetail(member);
 
         return (
-            <span className={`grid text-sm ${className}`}>
+            <span className={`grid text-base ${className}`}>
                 <span className="flex items-center gap-1 font-semibold text-emerald-700 dark:text-emerald-400">
                     <CheckCircle2 className="size-4" />
                     Yes
                 </span>
                 {showDetail && detail && (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-base text-muted-foreground">
                         {detail}
                     </span>
                 )}
@@ -149,7 +149,7 @@ function ClaimStatus({
 
     return limitReached ? (
         <span
-            className={`text-sm font-semibold text-amber-700 dark:text-amber-300 ${className}`}
+            className={`text-base font-semibold text-amber-700 dark:text-amber-300 ${className}`}
         >
             Limit reached
         </span>
@@ -439,7 +439,7 @@ export default function DistributionList({
                                     </span>
                                 </span>
                                 <span>{shareRule(event)}</span>
-                                <span className="text-sm">
+                                <span className="text-base">
                                     Printed {generated.at} by {generated.by}
                                     {filters.only_unclaimed
                                         ? ' · only people who have not claimed'
@@ -502,7 +502,7 @@ export default function DistributionList({
                                             </span>
                                         )}
                                         {household.limit_reached && (
-                                            <span className="rounded-md bg-amber-500 px-2 py-0.5 text-sm font-bold text-black">
+                                            <span className="rounded-md bg-amber-500 px-2 py-0.5 text-base font-bold text-black">
                                                 Household limit reached
                                             </span>
                                         )}
@@ -526,12 +526,12 @@ export default function DistributionList({
                                                         className="shrink-0"
                                                     />
                                                 </div>
-                                                <p className="font-mono text-xs text-muted-foreground">
+                                                <p className="font-mono text-base text-muted-foreground">
                                                     {member.system_id_no} ·{' '}
                                                     {member.age} yrs
                                                 </p>
                                                 {claimDetail(member) && (
-                                                    <p className="text-xs text-muted-foreground">
+                                                    <p className="text-base text-muted-foreground">
                                                         Claimed{' '}
                                                         {claimDetail(member)}
                                                     </p>
@@ -548,7 +548,7 @@ export default function DistributionList({
                                             <col className="w-48" />
                                         </colgroup>
                                         <thead>
-                                            <tr className="border-b-2 border-slate-200 text-sm text-muted-foreground dark:border-border">
+                                            <tr className="border-b-2 border-slate-200 text-base text-muted-foreground dark:border-border">
                                                 <th className="px-4 py-2 font-semibold">
                                                     Resident ID
                                                 </th>
@@ -572,7 +572,7 @@ export default function DistributionList({
                                                     key={member.system_id_no}
                                                     className="border-b border-slate-100 last:border-b-0 dark:border-border"
                                                 >
-                                                    <td className="px-4 py-2 font-mono text-sm">
+                                                    <td className="px-4 py-2 font-mono text-base">
                                                         {member.system_id_no}
                                                     </td>
                                                     <td className="px-2 py-2 font-semibold">

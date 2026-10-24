@@ -526,7 +526,7 @@ function RelativesList({
                 >
                     <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 text-lg font-bold">
                         {group.name}
-                        <span className="rounded-md bg-blue-600 px-2 py-0.5 text-sm font-bold text-white">
+                        <span className="rounded-md bg-blue-600 px-2 py-0.5 text-base font-bold text-white">
                             {group.people.length}
                         </span>
                     </summary>
@@ -550,7 +550,7 @@ function RelativesList({
                                         {person.name}
                                         {person.is_deceased ? ' †' : ''}
                                     </span>
-                                    <span className="text-sm text-muted-foreground">
+                                    <span className="text-base text-muted-foreground">
                                         {person.relation !== group.name &&
                                         person.relation &&
                                         !group.name

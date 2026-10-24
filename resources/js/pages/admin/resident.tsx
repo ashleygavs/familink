@@ -975,11 +975,11 @@ export default function ManageResident({
                     </Button>
                     <h1 className="flex flex-wrap items-center gap-3 text-3xl font-bold text-blue-900 dark:text-white">
                         {resident.full_name}
-                        <span className="rounded-md bg-blue-600 px-2 py-0.5 text-sm font-bold text-white">
+                        <span className="rounded-md bg-blue-600 px-2 py-0.5 text-base font-bold text-white">
                             {resident.status}
                         </span>
                         {resident.is_deceased && (
-                            <span className="rounded-md bg-slate-700 px-2 py-0.5 text-sm font-bold text-white">
+                            <span className="rounded-md bg-slate-700 px-2 py-0.5 text-base font-bold text-white">
                                 Deceased
                                 {resident.deceased_at
                                     ? ` ${formatDate(resident.deceased_at)}`
@@ -1179,7 +1179,7 @@ export default function ManageResident({
                                             : ''}{' '}
                                         by {card.replaced_by}
                                     </p>
-                                    <p className="text-sm">
+                                    <p className="text-base">
                                         {card.attempts === 0
                                             ? 'The old code has not been scanned since.'
                                             : `The old code was scanned ${card.attempts} ${card.attempts === 1 ? 'time' : 'times'} since${
@@ -1207,7 +1207,7 @@ export default function ManageResident({
                                     <p className="font-semibold">
                                         {change.summary}
                                     </p>
-                                    <p className="text-sm text-muted-foreground">
+                                    <p className="text-base text-muted-foreground">
                                         {change.changed_by}
                                         {change.changed_at
                                             ? ` · ${formatDate(change.changed_at)}`

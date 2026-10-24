@@ -19,10 +19,10 @@ export function UserInfo({
                     {getInitials(user.name)}
                 </AvatarFallback>
             </Avatar>
-            <div className="grid flex-1 text-left text-sm leading-tight">
+            <div className="grid flex-1 text-left text-base leading-tight">
                 <span className="truncate font-medium">{user.name}</span>
                 {showEmail && (
-                    <span className="truncate text-xs text-muted-foreground">
+                    <span className="truncate text-base text-muted-foreground">
                         {user.email}
                     </span>
                 )}

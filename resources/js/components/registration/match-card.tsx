@@ -47,7 +47,7 @@ export function MatchCard({
         >
             <div className="grid min-w-0 flex-1 gap-1 text-left">
                 <span
-                    className={`w-fit rounded-md px-2 py-0.5 text-sm font-bold ${
+                    className={`w-fit rounded-md px-2 py-0.5 text-base font-bold ${
                         strong
                             ? 'bg-emerald-600 text-white'
                             : 'bg-blue-600 text-white'

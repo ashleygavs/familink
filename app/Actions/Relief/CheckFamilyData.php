@@ -6,6 +6,7 @@ use App\Enums\ResidentStatus;
 use App\Models\Household;
 use App\Models\Resident;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
@@ -13,6 +14,11 @@ use Illuminate\Support\Collection;
  * born after her child or a person recorded as their own spouse. Bad links quietly break the family tree, the
  * relationship labels and the household review, so each one is listed with what is wrong and who to fix.
  *
+ * It works on plain rows rather than full resident objects, because it reads every resident the viewer may see, which
+ * is the whole province for a stakeholder.
+ *
+ * @phpstan-type Person array{id: int, name: string, birth: int, gender: string, father_id: int|null, mother_id: int|null, spouse_id: int|null, household_id: int|null}
+ * @phpstan-type Found array<string, list<array{subject: Person, text: string}>>
  * @phpstan-type Problem array{resident_id: int, resident_name: string, household_id: int|null, household_code: string|null, barangay_name: string|null, can_open: bool, text: string}
  * @phpstan-type ProblemGroup array{type: string, title: string, explanation: string, total: int, problems: list<Problem>}
  */
@@ -40,26 +46,18 @@ class CheckFamilyData
      */
     public function handle(User $user): array
     {
-        $columns = ['id', 'first_name', 'middle_name', 'last_name', 'suffix', 'birthdate', 'gender', 'father_id', 'mother_id', 'spouse_id', 'household_id', 'barangay_id', 'status'];
-
-        $people = Resident::query()
-            ->visibleTo($user)
-            ->whereNot('status', ResidentStatus::Archived->value)
-            ->get($columns)
-            ->keyBy('id');
-
+        $people = $this->people(Resident::query()->visibleTo($user)->whereNot('status', ResidentStatus::Archived->value));
         $scanned = $people->count();
 
         // Relatives may be in a barangay the user cannot see, but their records are still needed to judge the link.
-        $missing = $people->flatMap(fn (Resident $person): array => [$person->father_id, $person->mother_id, $person->spouse_id])
-            ->filter(fn ($id): bool => $id !== null && ! $people->has($id))
+        $missing = $people->flatMap(fn (array $person): array => [$person['father_id'], $person['mother_id'], $person['spouse_id']])
+            ->filter(fn (?int $id): bool => $id !== null && ! $people->has($id))
             ->unique()
             ->values();
 
-        $related = $missing->isEmpty() ? collect() : Resident::query()->whereIn('id', $missing)->get($columns)->keyBy('id');
-        $all = $people->union($related);
+        $all = $missing->isEmpty() ? $people : $people->union($this->people(Resident::query()->whereIn('id', $missing->all())));
 
-        /** @var array<string, list<array{subject: Resident, text: string}>> $found */
+        /** @var Found $found */
         $found = array_fill_keys(array_keys(self::TITLES), []);
 
         foreach ($people as $person) {
@@ -90,11 +88,11 @@ class CheckFamilyData
                 'total' => count($found[$type]),
                 'problems' => array_map(function (array $entry) use ($households, $scope): array {
                     $subject = $entry['subject'];
-                    $household = $subject->household_id === null ? null : $households->get($subject->household_id);
+                    $household = $subject['household_id'] === null ? null : $households->get($subject['household_id']);
 
                     return [
-                        'resident_id' => $subject->id,
-                        'resident_name' => $subject->full_name,
+                        'resident_id' => $subject['id'],
+                        'resident_name' => $subject['name'],
                         'household_id' => $household?->id,
                         'household_code' => $household?->household_code,
                         'barangay_name' => $household?->barangay->name,
@@ -109,81 +107,108 @@ class CheckFamilyData
     }
 
     /**
-     * @param  Collection<int, Resident>  $all
-     * @param  array<string, list<array{subject: Resident, text: string}>>  $found
+     * The residents of a query as small arrays keyed by id.
+     *
+     * @param  Builder<Resident>  $query
+     * @return Collection<int, Person>
      */
-    private function checkPerson(Resident $person, Collection $all, array &$found): void
+    private function people($query): Collection
     {
-        $name = $person->full_name;
-        $father = $person->father_id === null ? null : $all->get($person->father_id);
-        $mother = $person->mother_id === null ? null : $all->get($person->mother_id);
-        $spouse = $person->spouse_id === null ? null : $all->get($person->spouse_id);
+        return $query->toBase()
+            ->get(['id', 'first_name', 'middle_name', 'last_name', 'suffix', 'birthdate', 'gender', 'father_id', 'mother_id', 'spouse_id', 'household_id'])
+            ->mapWithKeys(fn (object $row): array => [(int) $row->id => [
+                'id' => (int) $row->id,
+                'name' => implode(' ', array_filter([$row->first_name, $row->middle_name, $row->last_name, $row->suffix])),
+                'birth' => (int) strtotime((string) $row->birthdate),
+                'gender' => (string) $row->gender,
+                'father_id' => $row->father_id === null ? null : (int) $row->father_id,
+                'mother_id' => $row->mother_id === null ? null : (int) $row->mother_id,
+                'spouse_id' => $row->spouse_id === null ? null : (int) $row->spouse_id,
+                'household_id' => $row->household_id === null ? null : (int) $row->household_id,
+            ]]);
+    }
+
+    /**
+     * @param  Person  $person
+     * @param  Collection<int, Person>  $all
+     * @param  Found  $found
+     */
+    private function checkPerson(array $person, Collection $all, array &$found): void
+    {
+        $name = $person['name'];
+        $father = $person['father_id'] === null ? null : $all->get($person['father_id']);
+        $mother = $person['mother_id'] === null ? null : $all->get($person['mother_id']);
+        $spouse = $person['spouse_id'] === null ? null : $all->get($person['spouse_id']);
 
         foreach (['father_id' => 'father', 'mother_id' => 'mother', 'spouse_id' => 'spouse'] as $column => $role) {
-            if ($person->{$column} === $person->id) {
+            if ($person[$column] === $person['id']) {
                 $found['own_link'][] = ['subject' => $person, 'text' => "{$name} is recorded as their own {$role}."];
             }
         }
 
-        if ($person->birthdate->isFuture()) {
-            $found['future_birth'][] = ['subject' => $person, 'text' => "{$name} has a birthdate of {$person->birthdate->toFormattedDateString()}, which has not happened yet."];
+        if ($person['birth'] > time()) {
+            $found['future_birth'][] = ['subject' => $person, 'text' => "{$name} has a birthdate of ".date('M j, Y', $person['birth']).', which has not happened yet.'];
         }
 
-        if ($person->father_id !== null && $person->father_id === $person->mother_id) {
-            $found['same_parent'][] = ['subject' => $person, 'text' => "{$name} has the same person, {$father->full_name}, as both father and mother."];
+        if ($person['father_id'] !== null && $person['father_id'] === $person['mother_id']) {
+            $found['same_parent'][] = ['subject' => $person, 'text' => "{$name} has the same person, ".($father['name'] ?? 'someone').', as both father and mother.'];
         }
 
-        if ($father !== null && $father->id !== $person->id && $father->gender === 'Female') {
-            $found['parent_gender'][] = ['subject' => $person, 'text' => "{$name}'s father, {$father->full_name}, is recorded as female."];
+        if ($father !== null && $father['id'] !== $person['id'] && $father['gender'] === 'Female') {
+            $found['parent_gender'][] = ['subject' => $person, 'text' => "{$name}'s father, {$father['name']}, is recorded as female."];
         }
 
-        if ($mother !== null && $mother->id !== $person->id && $mother->gender === 'Male') {
-            $found['parent_gender'][] = ['subject' => $person, 'text' => "{$name}'s mother, {$mother->full_name}, is recorded as male."];
+        if ($mother !== null && $mother['id'] !== $person['id'] && $mother['gender'] === 'Male') {
+            $found['parent_gender'][] = ['subject' => $person, 'text' => "{$name}'s mother, {$mother['name']}, is recorded as male."];
         }
 
         foreach ([['father', $father], ['mother', $mother]] as [$role, $parent]) {
-            if ($parent === null || $parent->id === $person->id) {
+            if ($parent === null || $parent['id'] === $person['id']) {
                 continue;
             }
 
-            $years = round(($person->birthdate->getTimestamp() - $parent->birthdate->getTimestamp()) / (365.25 * 86400), 1);
+            $years = round(($person['birth'] - $parent['birth']) / (365.25 * 86400), 1);
 
             if ($years < self::MINIMUM_PARENT_AGE_GAP) {
                 $found['parent_age'][] = ['subject' => $person, 'text' => $years < 0
-                    ? "{$name}'s {$role}, {$parent->full_name}, was born after them."
-                    : "{$name}'s {$role}, {$parent->full_name}, was born only ".(int) floor($years).' years before them.'];
+                    ? "{$name}'s {$role}, {$parent['name']}, was born after them."
+                    : "{$name}'s {$role}, {$parent['name']}, was born only ".(int) floor($years).' years before them.'];
             }
 
-            if ($person->id < $parent->id && in_array($person->id, [$parent->father_id, $parent->mother_id], true)) {
-                $found['parent_loop'][] = ['subject' => $person, 'text' => "{$name} and {$parent->full_name} are each recorded as the other's parent."];
+            if ($person['id'] < $parent['id'] && in_array($person['id'], [$parent['father_id'], $parent['mother_id']], true)) {
+                $found['parent_loop'][] = ['subject' => $person, 'text' => "{$name} and {$parent['name']} are each recorded as the other's parent."];
             }
         }
 
-        if ($spouse === null || $spouse->id === $person->id) {
+        if ($spouse === null || $spouse['id'] === $person['id']) {
             return;
         }
 
-        if ($spouse->spouse_id !== $person->id) {
-            $found['spouse_one_way'][] = ['subject' => $person, 'text' => $spouse->spouse_id === null
-                ? "{$name} is recorded as married to {$spouse->full_name}, but {$spouse->full_name} has no spouse recorded."
-                : "{$name} is recorded as married to {$spouse->full_name}, but {$spouse->full_name} is recorded as married to someone else."];
+        if ($spouse['spouse_id'] !== $person['id']) {
+            $found['spouse_one_way'][] = ['subject' => $person, 'text' => $spouse['spouse_id'] === null
+                ? "{$name} is recorded as married to {$spouse['name']}, but {$spouse['name']} has no spouse recorded."
+                : "{$name} is recorded as married to {$spouse['name']}, but {$spouse['name']} is recorded as married to someone else."];
         }
 
         $kin = match (true) {
-            in_array($spouse->id, [$person->father_id, $person->mother_id], true) => 'parent',
-            in_array($person->id, [$spouse->father_id, $spouse->mother_id], true) => 'child',
+            in_array($spouse['id'], [$person['father_id'], $person['mother_id']], true) => 'parent',
+            in_array($person['id'], [$spouse['father_id'], $spouse['mother_id']], true) => 'child',
             $this->sharesParent($person, $spouse) => 'brother or sister',
             default => null,
         };
 
-        if ($kin !== null && ($person->id < $spouse->id || $spouse->spouse_id !== $person->id)) {
-            $found['spouse_relative'][] = ['subject' => $person, 'text' => "{$name} is recorded as married to their own {$kin}, {$spouse->full_name}."];
+        if ($kin !== null && ($person['id'] < $spouse['id'] || $spouse['spouse_id'] !== $person['id'])) {
+            $found['spouse_relative'][] = ['subject' => $person, 'text' => "{$name} is recorded as married to their own {$kin}, {$spouse['name']}."];
         }
     }
 
-    private function sharesParent(Resident $one, Resident $other): bool
+    /**
+     * @param  Person  $one
+     * @param  Person  $other
+     */
+    private function sharesParent(array $one, array $other): bool
     {
-        return ($one->father_id !== null && $one->father_id === $other->father_id)
-            || ($one->mother_id !== null && $one->mother_id === $other->mother_id);
+        return ($one['father_id'] !== null && $one['father_id'] === $other['father_id'])
+            || ($one['mother_id'] !== null && $one['mother_id'] === $other['mother_id']);
     }
 }

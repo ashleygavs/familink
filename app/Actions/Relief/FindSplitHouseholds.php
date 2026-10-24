@@ -43,7 +43,7 @@ class FindSplitHouseholds
 
         foreach ($this->children($barangayIds) as $row) {
             $this->note($found, $row['child_household'], $row['parent_household'], [$row['child_id'], $row['parent_id']], [
-                'child', $row['child_id'], $row['parent_id'], $row['parent_id'] === $row['father_id'] ? 'father' : 'mother',
+                'child', $row['child_id'], $row['parent_id'], $row['role'],
             ]);
         }
 
@@ -150,28 +150,33 @@ class FindSplitHouseholds
     }
 
     /**
-     * Young children who live in a different household from a parent.
+     * Young children who live in a different household from a parent. The father and the mother are looked up one
+     * after the other: a single join on "father or mother" cannot use the indexes and is very slow on a large list.
      *
      * @param  list<int>|null  $barangayIds
-     * @return list<array{child_id: int, parent_id: int, father_id: int|null, child_household: int, parent_household: int}>
+     * @return list<array{child_id: int, parent_id: int, role: string, child_household: int, parent_household: int}>
      */
     private function children(?array $barangayIds): array
     {
-        $parents = DB::table('residents as c')
-            ->join('residents as p', fn ($join) => $join->on('p.id', '=', 'c.father_id')->orOn('p.id', '=', 'c.mother_id'));
+        $rows = [];
 
-        return array_values($this->active($parents, ['c', 'p'])
-            ->where('c.birthdate', '>', now()->subYears(self::CHILD_AGE)->toDateString())
-            ->whereColumn('c.household_id', '<>', 'p.household_id')
-            ->when($barangayIds !== null, fn (Builder $query) => $query
-                ->where(fn (Builder $inner) => $inner->whereIn('c.barangay_id', $barangayIds)->orWhereIn('p.barangay_id', $barangayIds)))
-            ->get(['c.id as child_id', 'p.id as parent_id', 'c.father_id as father_id', 'c.household_id as child_household', 'p.household_id as parent_household'])
-            ->map(fn (object $row): array => [
-                'child_id' => (int) $row->child_id, 'parent_id' => (int) $row->parent_id,
-                'father_id' => $row->father_id === null ? null : (int) $row->father_id,
-                'child_household' => (int) $row->child_household, 'parent_household' => (int) $row->parent_household,
-            ])
-            ->all());
+        foreach (['father_id' => 'father', 'mother_id' => 'mother'] as $column => $role) {
+            $parents = DB::table('residents as c')->join('residents as p', 'p.id', '=', "c.{$column}");
+
+            foreach ($this->active($parents, ['c', 'p'])
+                ->where('c.birthdate', '>', now()->subYears(self::CHILD_AGE)->toDateString())
+                ->whereColumn('c.household_id', '<>', 'p.household_id')
+                ->when($barangayIds !== null, fn (Builder $query) => $query
+                    ->where(fn (Builder $inner) => $inner->whereIn('c.barangay_id', $barangayIds)->orWhereIn('p.barangay_id', $barangayIds)))
+                ->get(['c.id as child_id', 'p.id as parent_id', 'c.household_id as child_household', 'p.household_id as parent_household']) as $row) {
+                $rows[] = [
+                    'child_id' => (int) $row->child_id, 'parent_id' => (int) $row->parent_id, 'role' => $role,
+                    'child_household' => (int) $row->child_household, 'parent_household' => (int) $row->parent_household,
+                ];
+            }
+        }
+
+        return $rows;
     }
 
     /**

@@ -22,7 +22,7 @@ const buttonVariants = cva(
       },
       size: {
         default: "min-h-12 px-5 py-2 text-base has-[>svg]:px-4",
-        sm: "min-h-10 rounded-md px-3 text-sm has-[>svg]:px-2.5",
+        sm: "min-h-12 rounded-md px-4 text-base has-[>svg]:px-3",
         lg: "min-h-14 rounded-md px-6 text-lg has-[>svg]:px-5",
         icon: "size-12",
       },

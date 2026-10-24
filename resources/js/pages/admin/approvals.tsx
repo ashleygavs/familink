@@ -62,7 +62,7 @@ function LinkedPerson({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-8 text-red-700 hover:bg-red-50 hover:text-red-800"
+                className="text-red-700 hover:bg-red-50 hover:text-red-800"
                 onClick={onUnlink}
             >
                 <Unlink />

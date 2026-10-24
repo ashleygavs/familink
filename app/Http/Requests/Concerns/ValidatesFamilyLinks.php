@@ -17,6 +17,12 @@ use Illuminate\Validation\Validator;
  */
 trait ValidatesFamilyLinks
 {
+    /** A parent must be at least this many years older than the child, the same limit the data check uses. */
+    private const MINIMUM_PARENT_AGE_GAP = 12;
+
+    /** The youngest age at which someone can be recorded as married. */
+    private const MINIMUM_MARRIED_AGE = 16;
+
     /**
      * @return array<string, array<int, mixed>>
      */
@@ -66,14 +72,12 @@ trait ValidatesFamilyLinks
 
             if ($subject !== null && $parent->id === $subject->id) {
                 $validator->errors()->add($field, "A person cannot be their own {$label}.");
-            } elseif (! $parent->birthdate->lt($birthdate)) {
-                $validator->errors()->add($field, "The {$label} must be older than the resident.");
+            } elseif (! $this->isOlderBy($parent->birthdate, $birthdate)) {
+                $validator->errors()->add($field, "The {$label} must be at least ".self::MINIMUM_PARENT_AGE_GAP.' years older than the resident.');
             }
         }
 
-        if ($subject !== null && $this->filled('spouse_id') && $this->integer('spouse_id') === $subject->id) {
-            $validator->errors()->add('spouse_id', 'A person cannot be their own spouse.');
-        }
+        $this->guardSpouse($validator, $birthdate, $subject);
 
         $this->guardDependents($validator, $birthdate, $gender, $subject);
     }
@@ -98,9 +102,59 @@ trait ValidatesFamilyLinks
                 $validator->errors()->add('dependent_ids', "{$child->full_name} is already chosen as a parent or spouse.");
             } elseif ($currentParent !== null && ($subject === null || $currentParent !== $subject->id)) {
                 $validator->errors()->add('dependent_ids', "{$child->full_name} already has a ".($parentColumn === 'father_id' ? 'father' : 'mother').' on record.');
-            } elseif (! $child->birthdate->gt($birthdate)) {
-                $validator->errors()->add('dependent_ids', "{$child->full_name} must be younger than the resident.");
+            } elseif (! $this->isOlderBy($birthdate, $child->birthdate)) {
+                $validator->errors()->add('dependent_ids', "{$child->full_name} must be at least ".self::MINIMUM_PARENT_AGE_GAP.' years younger than the resident.');
             }
+        }
+    }
+
+    /**
+     * Whether the first person was born at least the minimum parent age gap before the second.
+     */
+    private function isOlderBy(CarbonInterface $older, CarbonInterface $younger): bool
+    {
+        return round(($younger->getTimestamp() - $older->getTimestamp()) / (365.25 * 86400), 1) >= self::MINIMUM_PARENT_AGE_GAP;
+    }
+
+    /**
+     * A spouse must be an adult who is not the person's own parent, child, brother or sister, judging by the links being
+     * saved together with the ones already on record.
+     */
+    private function guardSpouse(Validator $validator, CarbonInterface $birthdate, ?Resident $subject): void
+    {
+        if (! $this->filled('spouse_id')) {
+            return;
+        }
+
+        $spouse = Resident::query()->find($this->integer('spouse_id'));
+
+        if ($subject !== null && $this->integer('spouse_id') === $subject->id) {
+            $validator->errors()->add('spouse_id', 'A person cannot be their own spouse.');
+
+            return;
+        }
+
+        if ($spouse === null) {
+            return;
+        }
+
+        $fatherId = $this->filled('father_id') ? $this->integer('father_id') : $subject?->father_id;
+        $motherId = $this->filled('mother_id') ? $this->integer('mother_id') : $subject?->mother_id;
+        $childIds = array_map('intval', (array) $this->input('dependent_ids', []));
+
+        $relation = match (true) {
+            in_array($spouse->id, [$fatherId, $motherId], true) || ($subject !== null && in_array($spouse->id, [$subject->father_id, $subject->mother_id], true)) => 'parent',
+            in_array($spouse->id, $childIds, true) || ($subject !== null && in_array($subject->id, [$spouse->father_id, $spouse->mother_id], true)) => 'child',
+            ($fatherId !== null && $fatherId === $spouse->father_id) || ($motherId !== null && $motherId === $spouse->mother_id) => 'brother or sister',
+            default => null,
+        };
+
+        if ($relation !== null) {
+            $validator->errors()->add('spouse_id', "A person cannot be married to their own {$relation}.");
+        }
+
+        if ($birthdate->age < self::MINIMUM_MARRIED_AGE || $spouse->birthdate->age < self::MINIMUM_MARRIED_AGE) {
+            $validator->errors()->add('spouse_id', 'Both people must be at least '.self::MINIMUM_MARRIED_AGE.' years old to be recorded as married.');
         }
     }
 }

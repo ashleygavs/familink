@@ -240,7 +240,7 @@ export default function Analytics({
                                 {location.barangays.map((name) => (
                                     <span
                                         key={name}
-                                        className="rounded-md bg-blue-600 px-2 py-0.5 text-sm font-bold text-white"
+                                        className="rounded-md bg-blue-600 px-2 py-0.5 text-base font-bold text-white"
                                     >
                                         {name}
                                     </span>
@@ -392,7 +392,7 @@ export default function Analytics({
                                                     {row.name}
                                                 </button>
                                                 {row.municipality_name && (
-                                                    <span className="ml-2 text-sm font-normal text-muted-foreground">
+                                                    <span className="ml-2 text-base font-normal text-muted-foreground">
                                                         {row.municipality_name}
                                                     </span>
                                                 )}
@@ -510,7 +510,7 @@ export default function Analytics({
                                         </div>
                                         {household.claimed !== null && (
                                             <span
-                                                className={`rounded-md px-2 py-0.5 text-sm font-bold ${
+                                                className={`rounded-md px-2 py-0.5 text-base font-bold ${
                                                     household.claimed
                                                         ? 'bg-emerald-600 text-white'
                                                         : 'bg-slate-200 text-slate-900'

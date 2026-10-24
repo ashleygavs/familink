@@ -139,7 +139,7 @@ it('links the father and mother and validates their gender and age', function ()
 });
 
 it('links spouses in both directions and rejects an already married spouse', function () {
-    $spouse = Resident::factory()->create(['gender' => 'Male']);
+    $spouse = Resident::factory()->create(['gender' => 'Male', 'birthdate' => '1985-06-01']);
 
     $this->actingAs($this->encoder)->post(route('encoder.register.store'), registrationPayload(['spouse_id' => $spouse->id]))
         ->assertSessionHasNoErrors();
