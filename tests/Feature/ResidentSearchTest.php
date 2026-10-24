@@ -19,7 +19,9 @@ it('finds residents by partial name across barangays', function () {
         ->assertOk()
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.full_name', fn ($name) => str_contains($name, 'Juan'))
-        ->assertJsonStructure(['data' => [['id', 'full_name', 'system_id_no', 'birthdate', 'gender', 'barangay_name', 'household' => ['id', 'household_code', 'street_address']]]]);
+        ->assertJsonPath('data.0.birth_year', fn ($year) => is_int($year))
+        ->assertJsonPath('data.0.gender', fn ($gender) => in_array($gender, ['Male', 'Female'], true))
+        ->assertJsonPath('data.0.barangay_name', fn ($name) => is_string($name));
 });
 
 it('finds residents by system id and never exposes the qr hash', function () {

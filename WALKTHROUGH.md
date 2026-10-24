@@ -78,6 +78,7 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 **Duplicate and rule checks**
 - [ ] Try to register the same name and birthdate again. Expected: a clear "already registered" message.
 - [ ] Try a father who is younger than the child, or a mother born after the child. Expected: refused with a reason.
+- [ ] In **Register Resident**, search for a parent who lives in another barangay (for example a Cabalantian person from San Jose). The result shows the name, gender, birth year and barangay only: no resident ID, exact birthdate or address. People of your own barangay still show everything.
 
 **Residents page and QR cards**
 - [ ] Open **Residents**. Search "Juan", then "FL-2026-SJ-00002", then "HH-SJ-0001": each finds the right person.
@@ -109,7 +110,7 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 - [ ] **Scan QR Code**, "Cash Aid": scan Carmen, Roberto, Elena (`FL-2026-CAB-00001` to `-00003`). Expected: all green.
 - [ ] Scan Miguel (`FL-2026-CAB-00004`), the 4th person in that household. Expected: red, "already used all 3 claims allowed". Sofia is `FL-2026-CAB-00005`.
 - [ ] Switch to "Rice Distribution", scan Teresa (`FL-2026-CAB-00006`). Expected: green. Scan Lito (same household). Expected: red, household claimed.
-- [ ] Scan a San Jose ID (`FL-2026-SJ-00003`). Expected: red, "belongs to another barangay".
+- [ ] Scan a San Jose ID (`FL-2026-SJ-00003`). Expected: red, "belongs to a resident of another barangay or municipality". No name, ID or barangay of that person is shown.
 
 ### A3. Encoder, Santa Cruz (`lub.santacruz.encoder@familink.test`)
 - [ ] Header shows "Barangay Santa Cruz". The scanner lists only "Lubao Relief Packs" and it is selected automatically.
@@ -315,6 +316,22 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 ## F. Camera scanning (when you are ready)
 - [ ] Follow "Phone setup" below, open **Scan QR Code**, and scan a card shown on the PC screen (http://localhost:8000/households/1/cards).
 - [ ] Expected: green APPROVED for the first member, red for the second member of the same household.
+- [ ] Log out in another tab, then scan. Expected: a plain message saying you were signed out and to reload, not a technical error.
+
+---
+
+## Before going live
+
+Do these once, on the computer or host that people will really use. None of them are needed for testing on this PC.
+
+- [ ] In the live .env: APP_ENV=production, APP_DEBUG=false, LOG_LEVEL=error, and APP_URL set to the https:// address. With APP_ENV=production the app already forces secure cookies, encrypted sessions and hides debug pages.
+- [ ] Install without the developer tools: composer install --no-dev --optimize-autoloader. This leaves out the Laravel Boost route (_boost/browser-logs) and the Inertia developer tools.
+- [ ] If the app sits behind a load balancer or a reverse proxy, set TRUSTED_PROXIES to its address(es), comma separated. If you leave it out, the app trusts only this computer, so a visitor cannot fake their address to get around the login lockout.
+- [ ] Do not leave public/hot on the live server (it only exists while 
+pm run dev runs). Run 
+pm run build instead.
+- [ ] Set up a real mail service in .env (MAIL_MAILER, host, user, password), or tell staff that **Forgot your password** will not send an email. Right now emails are only written to the log file.
+- [ ] Make a backup before the first real use (see below) and decide who makes one each day.
 
 ---
 

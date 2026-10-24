@@ -24,6 +24,11 @@ class EnsureAccountIsActive
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
+            // A scanner or a search box is not a page, so it needs a plain answer it can show, not a redirect to log in.
+            if ($request->expectsJson()) {
+                return response()->json(['message' => self::MESSAGE], 401);
+            }
+
             return redirect()->route('login')->with('status', self::MESSAGE);
         }
 

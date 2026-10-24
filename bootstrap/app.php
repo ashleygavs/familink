@@ -4,6 +4,7 @@ use App\Http\Middleware\CheckRole;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\ThrottlePasswordReset;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -20,12 +21,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
         $middleware->alias(['role' => CheckRole::class]);
 
-        // Behind a tunnel or a host's load balancer the app is reached over HTTPS through a proxy. Trusting it makes
-        // Laravel build https:// links and treat the request as secure, so the phone camera and the session cookie work.
-        $middleware->trustProxies(at: '*');
-
         $middleware->web(append: [
             EnsureAccountIsActive::class,
+            ThrottlePasswordReset::class,
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,

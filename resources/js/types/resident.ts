@@ -11,8 +11,10 @@ export type HouseholdSummary = {
 export type ResidentOption = {
     id: number;
     full_name: string;
-    system_id_no: string;
-    birthdate: string;
+    /** Only given for residents of the viewer's own barangays. */
+    system_id_no: string | null;
+    birthdate: string | null;
+    birth_year: number;
     gender: 'Male' | 'Female';
     status: string;
     birthdate_estimated: boolean;

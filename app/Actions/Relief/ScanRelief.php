@@ -48,7 +48,8 @@ class ScanRelief
         }
 
         if (! $this->inArea($user, $event, $resident)) {
-            return $this->deny('outside_area', "{$resident->full_name} belongs to another barangay or municipality, so they cannot claim here.", $resident);
+            // Nothing about the person is shown, so typing resident IDs cannot be used to learn who lives elsewhere.
+            return $this->deny('outside_area', 'This code belongs to a resident of another barangay or municipality, so it cannot claim here.');
         }
 
         if ($resident->is_deceased) {

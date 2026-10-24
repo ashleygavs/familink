@@ -32,7 +32,11 @@ export function ResidentSummary({ resident }: { resident: ResidentOption }) {
             <span className="text-lg font-bold">{resident.full_name}</span>
             <span className="text-base text-muted-foreground">
                 Born {resident.birthdate_estimated ? 'about ' : ''}
-                {formatDate(resident.birthdate)} · ID {resident.system_id_no}
+                {resident.birthdate !== null
+                    ? formatDate(resident.birthdate)
+                    : resident.birth_year}
+                {resident.system_id_no !== null &&
+                    ` · ID ${resident.system_id_no}`}
             </span>
             {details.length > 0 && (
                 <span className="text-base text-muted-foreground">

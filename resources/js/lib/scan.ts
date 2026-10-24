@@ -78,12 +78,41 @@ export async function submitScan(
             );
         }
 
+        if (response.status === 401 || response.status === 419) {
+            throw new Error(
+                'You have been signed out, or this page has expired. Reload the page and sign in again, then scan again.',
+            );
+        }
+
+        if (response.status === 403) {
+            throw new Error(
+                'This account is not allowed to scan this event. Ask your admin.',
+            );
+        }
+
+        if (response.status === 429) {
+            throw new Error(
+                'Too many scans in a short time. Wait a moment, then scan again.',
+            );
+        }
+
         throw new Error(
             'Could not reach the server. Check the connection and try again.',
         );
     }
 
-    return (await response.json()) as ScanResult;
+    // A page that is not the scanner's own answer, such as a login page, must not show a technical message.
+    const outcome = (await response
+        .json()
+        .catch(() => null)) as ScanResult | null;
+
+    if (outcome === null) {
+        throw new Error(
+            'You may have been signed out. Reload the page and sign in again, then scan again.',
+        );
+    }
+
+    return outcome;
 }
 
 /**

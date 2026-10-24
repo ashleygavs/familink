@@ -106,7 +106,11 @@ class FortifyServiceProvider extends ServiceProvider
         RateLimiter::for('login', function (Request $request) {
             $throttleKey = Str::transliterate(Str::lower($request->input(Fortify::username())).'|'.$request->ip());
 
-            return Limit::perMinute(5)->by($throttleKey);
+            // The second limit counts the email alone, so trying from many addresses does not get around the lockout.
+            return [
+                Limit::perMinute(5)->by($throttleKey),
+                Limit::perMinute(10)->by('email|'.Str::transliterate(Str::lower((string) $request->input(Fortify::username())))),
+            ];
         });
 
         RateLimiter::for('passkeys', function (Request $request) {

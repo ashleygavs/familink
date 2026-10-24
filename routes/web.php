@@ -33,13 +33,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('role:'.RoleName::User->value)->prefix('encoder')->name('encoder.')->group(function () {
         Route::get('register', [ResidentController::class, 'create'])->name('register');
         Route::post('register', [ResidentController::class, 'store'])->name('register.store');
-        Route::get('residents/search', [ResidentController::class, 'search'])->name('residents.search');
-        Route::get('households/search', [HouseholdController::class, 'search'])->name('households.search');
-        Route::get('family-suggestions', FamilySuggestionController::class)->name('family-suggestions');
-        Route::get('family-relatives', FamilyRelativesController::class)->name('family-relatives');
-        Route::get('relative-suggestions', RelativeSuggestionController::class)->name('relative-suggestions');
+        Route::get('residents/search', [ResidentController::class, 'search'])->name('residents.search')->middleware('throttle:lookup');
+        Route::get('households/search', [HouseholdController::class, 'search'])->name('households.search')->middleware('throttle:lookup');
+        Route::get('family-suggestions', FamilySuggestionController::class)->name('family-suggestions')->middleware('throttle:lookup');
+        Route::get('family-relatives', FamilyRelativesController::class)->name('family-relatives')->middleware('throttle:lookup');
+        Route::get('relative-suggestions', RelativeSuggestionController::class)->name('relative-suggestions')->middleware('throttle:lookup');
         Route::get('scanner', [ReliefController::class, 'scanner'])->name('scanner');
-        Route::post('scan', [ReliefController::class, 'scan'])->name('scan');
+        Route::post('scan', [ReliefController::class, 'scan'])->name('scan')->middleware('throttle:scan');
     });
 
     Route::middleware('role:'.RoleName::Admin->value)->prefix('admin')->name('admin.')->group(function () {
@@ -88,7 +88,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('reports/household-review', [HouseholdReviewController::class, 'index'])->name('reports.household-review');
         Route::get('reports/data-check', FamilyDataCheckController::class)->name('reports.data-check');
         Route::get('reports/relationship', [RelationshipController::class, 'index'])->name('reports.relationship');
-        Route::get('reports/relationship/search', [RelationshipController::class, 'search'])->name('reports.relationship.search');
+        Route::get('reports/relationship/search', [RelationshipController::class, 'search'])->name('reports.relationship.search')->middleware('throttle:lookup');
         Route::get('family-tree/{household}', FamilyTreeController::class)->name('family-tree');
     });
 

@@ -39,7 +39,8 @@ return [
     |
     */
 
-    'debug' => (bool) env('APP_DEBUG', false),
+    // Debug pages show settings and code, so they are never shown on a live site, whatever APP_DEBUG says.
+    'debug' => env('APP_ENV') !== 'production' && (bool) env('APP_DEBUG', false),
 
     /*
     |--------------------------------------------------------------------------
