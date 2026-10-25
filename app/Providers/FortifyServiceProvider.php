@@ -6,6 +6,7 @@ use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
 use App\Http\Middleware\EnsureAccountIsActive;
 use App\Http\Responses\LoginResponse;
+use App\Http\Responses\PasswordResetLinkFailedResponse;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -16,6 +17,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use Laravel\Fortify\Contracts\FailedPasswordResetLinkRequestResponse as FailedPasswordResetLinkRequestResponseContract;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
@@ -63,6 +65,7 @@ class FortifyServiceProvider extends ServiceProvider
         });
 
         $this->app->singleton(LoginResponseContract::class, LoginResponse::class);
+        $this->app->bind(FailedPasswordResetLinkRequestResponseContract::class, PasswordResetLinkFailedResponse::class);
     }
 
     /**
@@ -71,7 +74,8 @@ class FortifyServiceProvider extends ServiceProvider
     private function configureViews(): void
     {
         Fortify::loginView(fn (Request $request) => Inertia::render('auth/login', [
-            'canResetPassword' => Features::enabled(Features::resetPasswords()),
+            // Hidden until the site can really send mail. Staff who forget a password ask a super admin to reset it.
+            'canResetPassword' => Features::enabled(Features::resetPasswords()) && config('fortify.show_reset_link'),
             'status' => $request->session()->get('status'),
         ]));
 

@@ -189,6 +189,7 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 **Staff accounts**
 - [ ] Open **Users**: only the encoder(s) of San Jose.
 - [ ] **Add account**: another encoder for San Jose. Role choices offered: Encoder only, and only San Jose as the barangay.
+- [ ] Open **Add account** and press Save with everything empty. Expected: short plain messages under each box, such as "Please fill in the email address." Nothing reads like "The email field is required."
 - [ ] Try to give that new account a barangay in Cabalantian or Lubao. Expected: not offered or refused.
 - [ ] **Deactivate** an encoder, confirm. Expected: "Inactive" label. In the encoder's browser, the next click logs them out, and logging in again says the account is deactivated.
 - [ ] At the bottom of **Users**, **Account changes** lists each change with the kind of change, who made it and when. After the steps above you see the creation, the deactivation and the reactivation. Changing an encoder's barangay shows 'Barangay from X to Y'. Setting a password only says 'A new password was set', never the password itself.
@@ -341,7 +342,7 @@ Do these once, on the computer or host that people will really use. None of them
 - [ ] Do not leave public/hot on the live server (it only exists while 
 pm run dev runs). Run 
 pm run build instead.
-- [ ] Set up a real mail service in .env (MAIL_MAILER, host, user, password), or tell staff that **Forgot your password** will not send an email. Right now emails are only written to the log file.
+- [ ] The login page does not show **Forgot your password?** on purpose, because the site cannot send mail yet. Tell staff to ask a super admin, who resets passwords on the Staff accounts page. When real mail works (MAIL_MAILER, host, user, password in .env), set `SHOW_PASSWORD_RESET_LINK=true` to show the link again. Until then emails are only written to the log file.
 - [ ] Make a backup before the first real use (see below) and decide who makes one each day.
 
 ---

@@ -76,6 +76,12 @@ return [
     'home' => '/dashboard',
 
     /*
+    | Show the Forgot your password? link on the login page. Keep it off until the site can really send mail.
+    */
+
+    'show_reset_link' => env('SHOW_PASSWORD_RESET_LINK', false),
+
+    /*
     |--------------------------------------------------------------------------
     | Fortify Routes Prefix / Subdomain
     |--------------------------------------------------------------------------
