@@ -15,6 +15,8 @@ class GenerateIdentifiers
      */
     public function systemId(Barangay $barangay): string
     {
+        $this->lock($barangay);
+
         $prefix = sprintf('FL-%d-%s-', now()->year, $this->barangayCode($barangay));
 
         return $prefix.$this->nextSequence(Resident::class, 'system_id_no', $prefix, 5);
@@ -25,9 +27,22 @@ class GenerateIdentifiers
      */
     public function householdCode(Barangay $barangay): string
     {
+        $this->lock($barangay);
+
         $prefix = sprintf('HH-%s-', $this->barangayCode($barangay));
 
         return $prefix.$this->nextSequence(Household::class, 'household_code', $prefix, 4);
+    }
+
+    /**
+     * Take turns with everyone else who is numbering residents or households in this barangay. The next number is read
+     * from the numbers already used, so two requests doing that at once would pick the same number or lock each
+     * other's rows and be stopped by a deadlock. Holding this one lock first, in the same order every time, avoids both.
+     * It lasts until the surrounding transaction ends, and does nothing when there is none.
+     */
+    public function lock(Barangay $barangay): void
+    {
+        Barangay::query()->whereKey($barangay->id)->lockForUpdate()->value('id');
     }
 
     /**

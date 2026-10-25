@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Actions\Residents\FindDuplicateResident;
 use App\Actions\Residents\FindFamilyMatches;
 use App\Enums\CivilStatus;
 use App\Enums\Gender;
@@ -268,21 +269,19 @@ class StoreResidentRequest extends FormRequest
 
     private function guardDuplicate(Validator $validator): void
     {
-        $existing = Resident::query()
-            ->where('first_name', $this->input('first_name'))
-            ->where('last_name', $this->input('last_name'))
-            ->whereDate('birthdate', $this->input('birthdate'))
-            ->whereNot('status', ResidentStatus::Archived->value)
-            ->when($this->filled('claim_resident_id'), fn ($query) => $query->whereKeyNot($this->integer('claim_resident_id')))
-            ->first();
+        $duplicates = app(FindDuplicateResident::class);
+        $existing = $duplicates->handle(
+            (string) $this->input('first_name'),
+            (string) $this->input('last_name'),
+            (string) $this->input('birthdate'),
+            $this->filled('claim_resident_id') ? $this->integer('claim_resident_id') : null,
+        );
 
         if ($existing === null) {
             return;
         }
 
-        $validator->errors()->add('first_name', $existing->status === ResidentStatus::Listed
-            ? "{$existing->full_name} was already listed by a family member. Choose \"Yes, this is me\" to use that record."
-            : "{$existing->full_name} born on {$existing->birthdate->format('M d, Y')} is already registered (ID {$existing->system_id_no}).");
+        $validator->errors()->add('first_name', $duplicates->message($existing));
     }
 
     private function guardNamedRelatives(Validator $validator): void
