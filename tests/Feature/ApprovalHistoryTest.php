@@ -116,7 +116,7 @@ it('keeps the whole reason even when the visible line has to be shortened', func
 it('does not let an admin archive a registration from a barangay they do not handle', function () {
     $outside = ($this->person)($this->other, ['status' => ResidentStatus::Pending]);
 
-    $this->actingAs($this->admin)->post(route('admin.approvals.archive', $outside), ['reason' => 'Not my area at all'])->assertForbidden();
+    $this->actingAs($this->admin)->post(route('admin.approvals.archive', $outside), ['reason' => 'Not my area at all'])->assertNotFound();
 
     expect($outside->fresh()->status)->toBe(ResidentStatus::Pending)->and(($this->history)($outside))->toHaveCount(0);
 });
@@ -213,7 +213,7 @@ it('shows the new history lines on the resident page, to the admin who handles t
     $outsideAdmin = User::factory()->withRole(RoleName::Admin)->create(['municipality_id' => $this->mine->municipality_id]);
     $outsideAdmin->managedBarangays()->sync([$this->other->id]);
 
-    $this->actingAs($outsideAdmin)->get(route('admin.residents.show', $resident))->assertForbidden();
+    $this->actingAs($outsideAdmin)->get(route('admin.residents.show', $resident))->assertNotFound();
 });
 
 it('keeps a history line short enough to read while keeping the details', function () {

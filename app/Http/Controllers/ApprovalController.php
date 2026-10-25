@@ -74,7 +74,7 @@ class ApprovalController extends Controller
 
     public function approve(Request $request, Resident $resident, ApproveRegistration $approve): RedirectResponse
     {
-        abort_unless($this->withinScope($request, $resident), 403);
+        abort_unless($this->withinScope($request, $resident), 404);
         abort_unless($resident->status === ResidentStatus::Pending, 409, 'This resident is no longer pending.');
 
         $approve->handle($request->user(), $resident);
@@ -99,7 +99,7 @@ class ApprovalController extends Controller
      */
     public function links(LinkRelativesRequest $request, Resident $resident, LinkRelatives $linkRelatives, RecordSuggestionFeedback $feedback): RedirectResponse
     {
-        abort_unless($this->withinScope($request, $resident), 403);
+        abort_unless($this->withinScope($request, $resident), 404);
         abort_unless($resident->status === ResidentStatus::Pending, 409, 'This resident is no longer pending.');
 
         $linkRelatives->handle($resident, $request->validated(), $request->user());
@@ -113,7 +113,7 @@ class ApprovalController extends Controller
      */
     public function unlink(UnlinkRelativeRequest $request, Resident $resident, UnlinkRelative $unlinkRelative): RedirectResponse
     {
-        abort_unless($this->withinScope($request, $resident), 403);
+        abort_unless($this->withinScope($request, $resident), 404);
         abort_unless($resident->status === ResidentStatus::Pending, 409, 'This resident is no longer pending.');
 
         $unlinkRelative->handle($resident, $request->validated('kind'), $request->validated('id'), $request->user());
@@ -127,7 +127,7 @@ class ApprovalController extends Controller
      */
     public function feedback(SuggestionFeedbackRequest $request, Resident $resident, RecordSuggestionFeedback $feedback): RedirectResponse
     {
-        abort_unless($this->withinScope($request, $resident), 403);
+        abort_unless($this->withinScope($request, $resident), 404);
         abort_unless($resident->status === ResidentStatus::Pending, 409, 'This resident is no longer pending.');
 
         $feedback->handle($resident, $request->user(), (array) $request->validated('suggestion_feedback'), 'approval');

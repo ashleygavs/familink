@@ -196,7 +196,7 @@ it('only shows an admin the residents of the barangays they handle', function ()
     $this->actingAs($this->admin)->get(route('admin.approvals'))
         ->assertInertia(fn ($page) => $page->has('pending.data', 1)->where('pending.data.0.id', $inside->id));
 
-    $this->actingAs($this->admin)->post(route('admin.approvals.approve', $outside))->assertForbidden();
+    $this->actingAs($this->admin)->post(route('admin.approvals.approve', $outside))->assertNotFound();
     $this->actingAs($this->admin)->post(route('admin.approvals.approve', $inside))->assertRedirect();
 });
 
@@ -240,8 +240,8 @@ it('lets an admin deactivate and reactivate only their own encoders', function (
     $this->actingAs($this->admin)->post(route('admin.users.reactivate', $mine))->assertRedirect();
     expect($mine->fresh()->isActive())->toBeTrue();
 
-    $this->actingAs($this->admin)->post(route('admin.users.deactivate', $foreign))->assertForbidden();
-    $this->actingAs($this->admin)->post(route('admin.users.deactivate', $this->superAdmin))->assertForbidden();
+    $this->actingAs($this->admin)->post(route('admin.users.deactivate', $foreign))->assertNotFound();
+    $this->actingAs($this->admin)->post(route('admin.users.deactivate', $this->superAdmin))->assertNotFound();
 });
 
 it('never lets someone deactivate themselves or the last active super admin', function () {

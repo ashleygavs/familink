@@ -16,7 +16,7 @@ class ResidentCardController extends Controller
      */
     public function resident(Request $request, Resident $resident): Response
     {
-        abort_unless(Resident::query()->visibleTo($request->user())->whereKey($resident->id)->exists(), 403);
+        abort_unless(Resident::query()->visibleTo($request->user())->whereKey($resident->id)->exists(), 404);
 
         if ($resident->is_deceased) {
             return $this->page("QR card for {$resident->full_name}", [], "{$resident->full_name} is recorded as deceased, so there is no QR card to print.");
@@ -34,7 +34,7 @@ class ResidentCardController extends Controller
      */
     public function household(Request $request, Household $household): Response
     {
-        abort_unless($request->user()->canAccessBarangay($household->barangay_id), 403);
+        abort_unless($request->user()->canAccessBarangay($household->barangay_id), 404);
 
         $members = Resident::query()
             ->with(['household', 'barangay'])

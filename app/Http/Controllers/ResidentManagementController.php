@@ -250,6 +250,6 @@ class ResidentManagementController extends Controller
 
     private function authorizeResident(Request $request, Resident $resident): void
     {
-        abort_unless(Resident::query()->visibleTo($request->user())->whereKey($resident->id)->exists(), 403);
+        abort_unless(Resident::query()->visibleTo($request->user())->whereKey($resident->id)->exists(), 404);
     }
 }

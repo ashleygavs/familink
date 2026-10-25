@@ -53,7 +53,14 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::authenticateUsing(function (Request $request): ?User {
             $user = User::query()->where(Fortify::username(), $request->input(Fortify::username()))->first();
 
-            if ($user === null || ! Hash::check((string) $request->input('password'), $user->password)) {
+            // An email with no account still costs the same time, so how fast the answer comes back tells nothing.
+            if ($user === null) {
+                Hash::check((string) $request->input('password'), self::decoyPasswordHash());
+
+                return null;
+            }
+
+            if (! Hash::check((string) $request->input('password'), $user->password)) {
                 return null;
             }
 
@@ -66,6 +73,16 @@ class FortifyServiceProvider extends ServiceProvider
 
         $this->app->singleton(LoginResponseContract::class, LoginResponse::class);
         $this->app->bind(FailedPasswordResetLinkRequestResponseContract::class, PasswordResetLinkFailedResponse::class);
+    }
+
+    /**
+     * A real hash, made once with the same settings as the accounts, that no password matches.
+     */
+    private static function decoyPasswordHash(): string
+    {
+        static $hash = null;
+
+        return $hash ??= Hash::make(Str::random(40));
     }
 
     /**

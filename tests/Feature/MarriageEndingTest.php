@@ -118,7 +118,7 @@ it('keeps ending a marriage to admins of the resident\'s barangay', function () 
     [$husband] = ($this->couple)();
     $outsider = Resident::factory()->create(['barangay_id' => Barangay::factory()->create()->id]);
 
-    $this->actingAs($this->admin)->post(route('admin.residents.marriage.end', $outsider), ['civil_status' => 'Separated'])->assertForbidden();
+    $this->actingAs($this->admin)->post(route('admin.residents.marriage.end', $outsider), ['civil_status' => 'Separated'])->assertNotFound();
 
     foreach ([RoleName::User, RoleName::Stakeholder] as $role) {
         $this->actingAs(User::factory()->withRole($role)->create(['barangay_id' => $this->barangay->id]))

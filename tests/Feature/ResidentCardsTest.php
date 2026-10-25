@@ -64,9 +64,9 @@ it('prints every approved living member of a household but nobody else', functio
 it('keeps cards inside the viewer\'s own barangays', function () {
     $foreign = ($this->foreign)();
 
-    $this->actingAs($this->encoder)->get(route('residents.card', $foreign))->assertForbidden();
-    $this->actingAs($this->admin)->get(route('residents.card', $foreign))->assertForbidden();
-    $this->actingAs($this->encoder)->get(route('households.cards', $foreign->household))->assertForbidden();
+    $this->actingAs($this->encoder)->get(route('residents.card', $foreign))->assertNotFound();
+    $this->actingAs($this->admin)->get(route('residents.card', $foreign))->assertNotFound();
+    $this->actingAs($this->encoder)->get(route('households.cards', $foreign->household))->assertNotFound();
     $this->actingAs(User::factory()->withRole(RoleName::SuperAdmin)->create())->get(route('residents.card', $foreign))->assertOk();
 });
 

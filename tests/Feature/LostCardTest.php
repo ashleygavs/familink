@@ -109,7 +109,7 @@ it('only replaces the card of an approved, living resident in the admin\'s baran
     ($this->replace)('Gone')->assertSessionHasErrors('reason');
 
     $outsider = Resident::factory()->create(['barangay_id' => Barangay::factory()->create()->id]);
-    ($this->replace)('Lost', $outsider)->assertForbidden();
+    ($this->replace)('Lost', $outsider)->assertNotFound();
     $this->actingAs($this->encoder)->post(route('admin.residents.card.replace', $this->resident), ['reason' => 'Lost'])->assertForbidden();
 
     expect(RetiredQrCode::query()->count())->toBe(0);

@@ -97,8 +97,8 @@ it('only lets an active event change its title, end date and status', function (
 it('stops an admin changing or deleting another municipality\'s event', function () {
     $foreign = ReliefEvent::factory()->draft()->create(['municipality_id' => $this->otherMunicipality->id]);
 
-    $this->actingAs($this->admin)->put(route('admin.events.update', $foreign), eventPayload())->assertForbidden();
-    $this->actingAs($this->admin)->delete(route('admin.events.destroy', $foreign))->assertForbidden();
+    $this->actingAs($this->admin)->put(route('admin.events.update', $foreign), eventPayload())->assertNotFound();
+    $this->actingAs($this->admin)->delete(route('admin.events.destroy', $foreign))->assertNotFound();
 });
 
 it('deletes only a draft that nobody has claimed from', function () {

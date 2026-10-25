@@ -97,10 +97,10 @@ it('only lets an admin record changes for residents in their own barangays', fun
     $foreign = Resident::factory()->create(['barangay_id' => $other->id, 'household_id' => Household::factory()->create(['barangay_id' => $other->id])->id, 'birthdate' => '1995-01-01']);
     $mine = ($this->make)();
 
-    $this->actingAs($this->admin)->post(route('admin.residents.marriage', $foreign), ['spouse_id' => $mine->id])->assertForbidden();
+    $this->actingAs($this->admin)->post(route('admin.residents.marriage', $foreign), ['spouse_id' => $mine->id])->assertNotFound();
     $this->actingAs($this->admin)->post(route('admin.residents.marriage', $mine), ['spouse_id' => $foreign->id])->assertSessionHasErrors('spouse_id');
-    $this->actingAs($this->admin)->get(route('admin.residents.show', $foreign))->assertForbidden();
-    $this->actingAs($this->admin)->post(route('admin.residents.household', $foreign), ['street_address' => '1 Test', 'household_role' => 'Other'])->assertForbidden();
+    $this->actingAs($this->admin)->get(route('admin.residents.show', $foreign))->assertNotFound();
+    $this->actingAs($this->admin)->post(route('admin.residents.household', $foreign), ['street_address' => '1 Test', 'household_role' => 'Other'])->assertNotFound();
 
     foreach ([RoleName::User, RoleName::Stakeholder] as $role) {
         $this->actingAs(User::factory()->withRole($role)->create(['barangay_id' => $this->barangay->id]))

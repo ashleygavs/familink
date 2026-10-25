@@ -116,7 +116,7 @@ class ReliefEventController extends Controller
      */
     public function destroy(Request $request, ReliefEvent $event, RecordEventChange $record): RedirectResponse
     {
-        abort_unless(ReliefEvent::query()->visibleTo($request->user())->whereKey($event->id)->exists(), 403);
+        abort_unless(ReliefEvent::query()->visibleTo($request->user())->whereKey($event->id)->exists(), 404);
 
         if ($event->status !== EventStatus::Draft || $event->logs()->exists()) {
             return back()->withErrors(['event' => 'Only a draft with no claims can be deleted. Close the event instead.']);

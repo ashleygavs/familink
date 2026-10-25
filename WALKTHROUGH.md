@@ -202,13 +202,13 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 **Forbidden for this role**
 - [ ] http://localhost:8000/admin/municipalities
 - [ ] http://localhost:8000/encoder/register and http://localhost:8000/encoder/scanner
-- [ ] A Cabalantian household (same municipality, other admin): http://localhost:8000/family-tree/7 and http://localhost:8000/residents/25/card
-- [ ] A Lubao household: http://localhost:8000/family-tree/9 and http://localhost:8000/households/9/cards
+- [ ] A Cabalantian household (same municipality, other admin), which shows "Not found" like a record that does not exist: http://localhost:8000/family-tree/7 and http://localhost:8000/residents/25/card
+- [ ] A Lubao household, which also shows "Not found": http://localhost:8000/family-tree/9 and http://localhost:8000/households/9/cards
 
 ### B2. Admin, Cabalantian (`bac.cabalantian.admin@familink.test`)
 - [ ] Header shows "Bacolor: Cabalantian". **Approvals**, **Residents** and **Analytics** show only Cabalantian people (Villanueva, Ramos). No Dela Cruz.
 - [ ] **Relief Events** shows the same four Bacolor events as the San Jose admin.
-- [ ] Open http://localhost:8000/family-tree/1 (San Jose). Expected: forbidden.
+- [ ] Open http://localhost:8000/family-tree/1 (San Jose). Expected: "Not found", the same as a number that does not exist.
 - [ ] Open HH-CAB-0001's tree: three generations (Carmen, then Roberto and Elena, then the children).
 
 **Changes after approval (marriage and household moves)**
@@ -251,12 +251,12 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 - [ ] Header shows "Lubao: Santa Cruz".
 - [ ] **Approvals**, **Residents**, **Analytics** show only Santa Cruz people (the Manalo and Dizon families). No Soriano, no Villanueva, no Dela Cruz.
 - [ ] **Relief Events** shows only "Lubao Relief Packs".
-- [ ] Open http://localhost:8000/family-tree/1 (San Jose) and http://localhost:8000/family-tree/11 (San Nicolas). Expected: both forbidden.
+- [ ] Open http://localhost:8000/family-tree/1 (San Jose) and http://localhost:8000/family-tree/11 (San Nicolas). Expected: both "Not found".
 - [ ] **Users** shows only the Santa Cruz encoder. Adding an encoder offers only Santa Cruz.
 
 ### B4. Admin, San Nicolas (`lub.sannicolas.admin@familink.test`)
 - [ ] Header shows "Lubao: San Nicolas". Everything shows only the Soriano family.
-- [ ] Open http://localhost:8000/family-tree/9 (Santa Cruz). Expected: forbidden. **Relief Events** shows "Lubao Relief Packs", shared with the Santa Cruz admin.
+- [ ] Open http://localhost:8000/family-tree/9 (Santa Cruz). Expected: "Not found". **Relief Events** shows "Lubao Relief Packs", shared with the Santa Cruz admin.
 - [ ] Approve the resident registered by the San Nicolas encoder (part A5 style): it works. The Santa Cruz admin cannot see that resident.
 
 ### B5. Admins, Mexico and San Luis (`mex.sanjosemalino.admin@familink.test`, `slu.stamonica.admin@familink.test`)

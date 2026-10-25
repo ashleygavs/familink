@@ -15,8 +15,13 @@ class MoveHouseholdRequest extends FormRequest
     {
         $resident = $this->route('resident');
 
-        return $resident instanceof Resident
-            && Resident::query()->visibleTo($this->user())->whereKey($resident->id)->exists();
+        // A record outside the user's area answers exactly like one that does not exist.
+        abort_unless(
+            $resident instanceof Resident && Resident::query()->visibleTo($this->user())->whereKey($resident->id)->exists(),
+            404,
+        );
+
+        return true;
     }
 
     /**

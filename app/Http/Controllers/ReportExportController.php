@@ -186,7 +186,7 @@ class ReportExportController extends Controller
 
     private function authorizeEvent(Request $request, ReliefEvent $event): void
     {
-        abort_unless(ReliefEvent::query()->visibleTo($request->user())->whereKey($event->id)->exists(), 403);
+        abort_unless(ReliefEvent::query()->visibleTo($request->user())->whereKey($event->id)->exists(), 404);
     }
 
     private function filename(string $kind, ReliefEvent $event): string

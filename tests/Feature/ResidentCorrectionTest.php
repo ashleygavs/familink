@@ -119,7 +119,7 @@ it('refuses corrections that contradict the family on record', function (array $
 it('keeps admins to their own barangays', function () {
     $outsider = Resident::factory()->create(['barangay_id' => Barangay::factory()->create()->id]);
 
-    $this->actingAs($this->admin)->post(route('admin.residents.deceased', $outsider), [])->assertForbidden();
-    $this->actingAs($this->admin)->post(route('admin.residents.living', $outsider))->assertForbidden();
-    $this->actingAs($this->admin)->patch(route('admin.residents.correct', $outsider), [])->assertForbidden();
+    $this->actingAs($this->admin)->post(route('admin.residents.deceased', $outsider), [])->assertNotFound();
+    $this->actingAs($this->admin)->post(route('admin.residents.living', $outsider))->assertNotFound();
+    $this->actingAs($this->admin)->patch(route('admin.residents.correct', $outsider), [])->assertNotFound();
 });

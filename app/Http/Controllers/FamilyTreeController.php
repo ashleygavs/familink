@@ -16,7 +16,7 @@ class FamilyTreeController extends Controller
      */
     public function __invoke(Request $request, Household $household, BuildFamilyTree $buildFamilyTree): Response
     {
-        abort_unless($request->user()->canAccessBarangay($household->barangay_id), 403);
+        abort_unless($request->user()->canAccessBarangay($household->barangay_id), 404);
 
         // An unknown reach, from an old or mistyped link, just shows the close family.
         $reach = $request->query('reach');

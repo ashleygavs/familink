@@ -97,8 +97,8 @@ it('keeps the claim exports away from encoders and other municipalities', functi
 
     $this->actingAs($this->encoder)->get(route('reports.claims-csv', $this->event))->assertForbidden();
     $this->actingAs($this->encoder)->get(route('reports.coverage-csv', $this->event))->assertForbidden();
-    $this->actingAs($this->admin)->get(route('reports.claims-csv', $foreign))->assertForbidden();
-    $this->actingAs($this->admin)->get(route('reports.coverage-csv', $foreign))->assertForbidden();
+    $this->actingAs($this->admin)->get(route('reports.claims-csv', $foreign))->assertNotFound();
+    $this->actingAs($this->admin)->get(route('reports.coverage-csv', $foreign))->assertNotFound();
 });
 
 it('lists who can claim in a barangay, grouped by household, and who already has', function () {

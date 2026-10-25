@@ -51,7 +51,7 @@ it('limits the family tree to stakeholders, admins of that barangay and super ad
         $this->actingAs($user)->get("/family-tree/{$household->id}")->assertOk();
     }
 
-    $this->actingAs($admin)->get("/family-tree/{$foreign->id}")->assertForbidden();
+    $this->actingAs($admin)->get("/family-tree/{$foreign->id}")->assertNotFound();
     $this->actingAs(User::factory()->withRole(RoleName::User)->create())->get("/family-tree/{$household->id}")->assertForbidden();
 });
 it('redirects guests to the login page', function () {

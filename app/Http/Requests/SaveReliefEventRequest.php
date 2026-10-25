@@ -20,8 +20,10 @@ class SaveReliefEventRequest extends FormRequest
             return true;
         }
 
-        return $event->status !== EventStatus::Closed
-            && ReliefEvent::query()->visibleTo($this->user())->whereKey($event->id)->exists();
+        // An event outside the user's area answers exactly like one that does not exist.
+        abort_unless(ReliefEvent::query()->visibleTo($this->user())->whereKey($event->id)->exists(), 404);
+
+        return $event->status !== EventStatus::Closed;
     }
 
     /**
