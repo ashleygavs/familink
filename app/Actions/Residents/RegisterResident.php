@@ -8,6 +8,7 @@ use App\Models\Barangay;
 use App\Models\Household;
 use App\Models\RelativeLink;
 use App\Models\Resident;
+use App\Models\ResidentChange;
 use App\Models\User;
 use Illuminate\Database\DeadlockException;
 use Illuminate\Database\QueryException;
@@ -24,6 +25,7 @@ class RegisterResident
         private LinkRelatives $linkRelatives,
         private ListRelatives $listRelatives,
         private RecordSuggestionFeedback $feedback,
+        private RecordResidentChange $record,
     ) {}
 
     /**
@@ -86,10 +88,20 @@ class RegisterResident
             $household->update(['head_resident_id' => $resident->id]);
         }
 
+        $this->record->handle(
+            $resident,
+            $actor,
+            ResidentChange::REGISTERED,
+            $claimed
+                ? "Registered by {$actor->name} in {$barangay->name}, using the record a relative listed."
+                : "Registered by {$actor->name} in {$barangay->name}.",
+            ['barangay_id' => $barangay->id, 'claimed_listed_record' => $claimed],
+        );
+
         if (! $claimed && ($data['path'] ?? 'existing') === 'new') {
             $this->listRelatives->handle($resident, $barangay, $household, (array) ($data['relatives'] ?? []));
         } else {
-            $this->linkRelatives->handle($resident, $data);
+            $this->linkRelatives->handle($resident, $data, $actor);
         }
 
         $this->declareRelatives($resident, (array) ($data['via_relatives'] ?? []));

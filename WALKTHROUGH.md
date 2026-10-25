@@ -144,7 +144,10 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 - [ ] Suggested links show for a person with an empty father, mother or spouse slot. Confirm one with **Yes, confirm link**.
 - [ ] Click **Unlink** next to a link and confirm. Expected: the link is gone and the person is not deleted.
 - [ ] **Approve** one person. Expected: they leave the list and can now have a QR card.
-- [ ] **Archive** another and confirm. Expected: they leave the list.
+- [ ] Each waiting person shows **Registered: by {encoder's name} · {date}**.
+- [ ] **Archive** another. Expected: the box asks "Why is it being archived?". Leaving it empty or writing under 5 letters shows a plain message and nothing is archived. Write a short reason and confirm: they leave the list.
+- [ ] Open the archived person under **Residents**. The **History** card lists who registered them and who archived them, with the reason. If they had a husband or wife or children linked, those links are gone, the partner's civil status is back to what it was, and the partner's History says so.
+- [ ] Open the person you approved: **History** shows "Approved by {your name}", and any links you confirmed or removed appear with your name.
 - [ ] Open that approved person under **Residents**: the QR card button now exists.
 
 **Relief events**

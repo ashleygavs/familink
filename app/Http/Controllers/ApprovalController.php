@@ -2,18 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Actions\Residents\ApproveRegistration;
+use App\Actions\Residents\ArchiveRegistration;
 use App\Actions\Residents\FindFamilyMatches;
 use App\Actions\Residents\LinkRelatives;
 use App\Actions\Residents\RecordSuggestionFeedback;
 use App\Actions\Residents\UnlinkRelative;
 use App\Enums\RelativeKind;
 use App\Enums\ResidentStatus;
+use App\Http\Requests\ArchiveRegistrationRequest;
 use App\Http\Requests\LinkRelativesRequest;
 use App\Http\Requests\SuggestionFeedbackRequest;
 use App\Http\Requests\UnlinkRelativeRequest;
 use App\Http\Resources\FamilySuggestionsResource;
 use App\Models\RelativeLink;
 use App\Models\Resident;
+use App\Models\ResidentChange;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -26,12 +30,22 @@ class ApprovalController extends Controller
      */
     public function index(Request $request, FindFamilyMatches $findFamilyMatches, RecordSuggestionFeedback $feedback): Response
     {
-        $pending = Resident::query()
+        $page = Resident::query()
             ->visibleTo($request->user())
             ->with(['barangay', 'household', 'father', 'mother', 'spouse', 'childrenAsFather', 'childrenAsMother'])
             ->where('status', ResidentStatus::Pending->value)
             ->oldest()
-            ->paginate(10)
+            ->paginate(10);
+
+        // Who entered each registration, so the person approving it can see where it came from.
+        $registeredBy = ResidentChange::query()
+            ->with('changedBy')
+            ->where('type', ResidentChange::REGISTERED)
+            ->whereIn('resident_id', $page->pluck('id'))
+            ->get()
+            ->keyBy('resident_id');
+
+        $pending = $page
             ->through(fn (Resident $resident) => [
                 'id' => $resident->id,
                 'full_name' => $resident->full_name,
@@ -50,6 +64,7 @@ class ApprovalController extends Controller
                     ->map(fn (Resident $child): array => ['id' => $child->id, 'full_name' => $child->full_name])
                     ->values()->all(),
                 'registered_at' => $resident->created_at?->toIso8601String(),
+                'registered_by' => $registeredBy->get($resident->id)?->changedBy->name,
                 'declared_relatives' => $this->declaredRelatives($resident),
                 'suggestions' => $this->suggestionsFor($findFamilyMatches, $feedback, $resident, $request->user()->accessibleBarangayIds()),
             ]);
@@ -57,14 +72,26 @@ class ApprovalController extends Controller
         return Inertia::render('admin/approvals', ['pending' => $pending]);
     }
 
-    public function approve(Request $request, Resident $resident): RedirectResponse
+    public function approve(Request $request, Resident $resident, ApproveRegistration $approve): RedirectResponse
     {
-        return $this->decide($resident, ResidentStatus::Approved, $request, 'approved');
+        abort_unless($this->withinScope($request, $resident), 403);
+        abort_unless($resident->status === ResidentStatus::Pending, 409, 'This resident is no longer pending.');
+
+        $approve->handle($request->user(), $resident);
+
+        return back()->with('success', "{$resident->full_name} was approved.");
     }
 
-    public function archive(Request $request, Resident $resident): RedirectResponse
+    /**
+     * Turn a registration down. A reason is required and kept in the person's history.
+     */
+    public function archive(ArchiveRegistrationRequest $request, Resident $resident, ArchiveRegistration $archive): RedirectResponse
     {
-        return $this->decide($resident, ResidentStatus::Archived, $request, 'archived');
+        abort_unless($resident->status === ResidentStatus::Pending, 409, 'This resident is no longer pending.');
+
+        $archive->handle($request->user(), $resident, $request->validated('reason'));
+
+        return back()->with('success', "{$resident->full_name} was archived.");
     }
 
     /**
@@ -75,7 +102,7 @@ class ApprovalController extends Controller
         abort_unless($this->withinScope($request, $resident), 403);
         abort_unless($resident->status === ResidentStatus::Pending, 409, 'This resident is no longer pending.');
 
-        $linkRelatives->handle($resident, $request->validated());
+        $linkRelatives->handle($resident, $request->validated(), $request->user());
         $feedback->handle($resident, $request->user(), (array) $request->validated('suggestion_feedback', []), 'approval');
 
         return back()->with('success', "Family links saved for {$resident->full_name}.");
@@ -89,7 +116,7 @@ class ApprovalController extends Controller
         abort_unless($this->withinScope($request, $resident), 403);
         abort_unless($resident->status === ResidentStatus::Pending, 409, 'This resident is no longer pending.');
 
-        $unlinkRelative->handle($resident, $request->validated('kind'), $request->validated('id'));
+        $unlinkRelative->handle($resident, $request->validated('kind'), $request->validated('id'), $request->user());
 
         return back()->with('success', "Family link removed for {$resident->full_name}.");
     }
@@ -176,19 +203,6 @@ class ApprovalController extends Controller
         }
 
         return FamilySuggestionsResource::make($matches)->resolve();
-    }
-
-    private function decide(Resident $resident, ResidentStatus $status, Request $request, string $verb): RedirectResponse
-    {
-        abort_unless($this->withinScope($request, $resident), 403);
-        abort_unless($resident->status === ResidentStatus::Pending, 409, 'This resident is no longer pending.');
-
-        $resident->update([
-            'status' => $status,
-            'approved_by_user_id' => $status === ResidentStatus::Approved ? $request->user()->id : null,
-        ]);
-
-        return back()->with('success', "{$resident->full_name} was {$verb}.");
     }
 
     /**

@@ -37,7 +37,7 @@ it('approves a pending resident and records who approved', function () {
 it('archives a pending resident without marking an approver', function () {
     $resident = Resident::factory()->pending()->create();
 
-    $this->actingAs($this->admin)->post(route('admin.approvals.archive', $resident))->assertRedirect();
+    $this->actingAs($this->admin)->post(route('admin.approvals.archive', $resident), ['reason' => 'Not a resident of this barangay.'])->assertRedirect();
 
     expect($resident->fresh()->status)->toBe(ResidentStatus::Archived)
         ->and($resident->fresh()->approved_by_user_id)->toBeNull();
@@ -46,7 +46,7 @@ it('archives a pending resident without marking an approver', function () {
 it('does not allow deciding on a resident twice', function () {
     $resident = Resident::factory()->create();
 
-    $this->actingAs($this->admin)->post(route('admin.approvals.archive', $resident))->assertStatus(409);
+    $this->actingAs($this->admin)->post(route('admin.approvals.archive', $resident), ['reason' => 'Not a resident of this barangay.'])->assertStatus(409);
 
     expect($resident->fresh()->status)->toBe(ResidentStatus::Approved);
 });

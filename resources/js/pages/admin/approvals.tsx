@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import ApprovalController from '@/actions/App/Http/Controllers/ApprovalController';
+import { Field } from '@/components/registration/field';
 import { SuggestedLinks } from '@/components/suggested-links';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,6 +22,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { formatDate } from '@/lib/format';
 import { familyTree } from '@/routes';
 import { approvals } from '@/routes/admin';
@@ -80,6 +82,8 @@ export default function Approvals({
     const [archiving, setArchiving] = useState<PendingResident | null>(null);
     const [busyId, setBusyId] = useState<number | null>(null);
     const [unlinking, setUnlinking] = useState<Unlinking | null>(null);
+    const [reason, setReason] = useState('');
+    const [reasonError, setReasonError] = useState<string | undefined>();
 
     function decide(url: string, resident: PendingResident) {
         setBusyId(resident.id);
@@ -92,6 +96,27 @@ export default function Approvals({
                     setBusyId(null);
                     setArchiving(null);
                 },
+            },
+        );
+    }
+
+    function startArchiving(resident: PendingResident) {
+        setReason('');
+        setReasonError(undefined);
+        setArchiving(resident);
+    }
+
+    /** An archived registration needs a reason, which is kept in the person's history. */
+    function archive(resident: PendingResident) {
+        setBusyId(resident.id);
+        router.post(
+            ApprovalController.archive.url(resident.id),
+            { reason },
+            {
+                preserveScroll: true,
+                onSuccess: () => setArchiving(null),
+                onError: (errors) => setReasonError(errors.reason),
+                onFinish: () => setBusyId(null),
             },
         );
     }
@@ -155,6 +180,14 @@ export default function Approvals({
                                         </p>
                                     </div>
                                     <dl className="grid gap-x-6 gap-y-2 text-base sm:grid-cols-2">
+                                        <Detail label="Registered">
+                                            {resident.registered_by
+                                                ? `by ${resident.registered_by}`
+                                                : 'by someone not recorded'}
+                                            {resident.registered_at
+                                                ? ` · ${formatDate(resident.registered_at)}`
+                                                : ''}
+                                        </Detail>
                                         <Detail label="Birthdate">
                                             {formatDate(resident.birthdate)}
                                         </Detail>
@@ -300,7 +333,7 @@ export default function Approvals({
                                             className="border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
                                             disabled={busyId === resident.id}
                                             onClick={() =>
-                                                setArchiving(resident)
+                                                startArchiving(resident)
                                             }
                                         >
                                             <Archive />
@@ -395,6 +428,23 @@ export default function Approvals({
                             Use this for mistakes or duplicates.
                         </DialogDescription>
                     </DialogHeader>
+                    <Field
+                        id="archive-reason"
+                        label="Why is it being archived?"
+                        hint="For example: duplicate of another record, or not a resident of this barangay. This stays in the person's history."
+                        error={reasonError}
+                    >
+                        <Input
+                            id="archive-reason"
+                            value={reason}
+                            maxLength={300}
+                            aria-invalid={reasonError ? true : undefined}
+                            onChange={(event) => {
+                                setReason(event.target.value);
+                                setReasonError(undefined);
+                            }}
+                        />
+                    </Field>
                     <DialogFooter className="gap-2">
                         <Button
                             variant="outline"
@@ -405,15 +455,7 @@ export default function Approvals({
                         <Button
                             variant="destructive"
                             disabled={busyId !== null}
-                            onClick={() =>
-                                archiving &&
-                                decide(
-                                    ApprovalController.archive.url(
-                                        archiving.id,
-                                    ),
-                                    archiving,
-                                )
-                            }
+                            onClick={() => archiving && archive(archiving)}
                         >
                             <Archive />
                             Yes, archive

@@ -53,6 +53,7 @@ export type PendingResident = {
     spouse_name: string | null;
     children: { id: number; full_name: string }[];
     registered_at: string | null;
+    registered_by: string | null;
     declared_relatives: {
         id: number;
         relation: string;

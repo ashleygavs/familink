@@ -1194,7 +1194,7 @@ export default function ManageResident({
                     </Card>
                 )}
 
-                <Card title="Changes made after approval" icon={History}>
+                <Card title="History" icon={History}>
                     {history.length === 0 ? (
                         <p className="text-muted-foreground">No changes yet.</p>
                     ) : (

@@ -43,6 +43,16 @@ class ResidentChange extends Model
 
     public const CORRECTION = 'correction';
 
+    public const REGISTERED = 'registered';
+
+    public const APPROVED = 'approved';
+
+    public const ARCHIVED = 'archived';
+
+    public const FAMILY_LINKED = 'family_linked';
+
+    public const FAMILY_UNLINKED = 'family_unlinked';
+
     /**
      * @return array<string, string>
      */
