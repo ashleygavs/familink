@@ -335,7 +335,10 @@ function StaffForm({
                             }}
                         />
                     </Field>
-                    <fieldset className="grid gap-2">
+                    <fieldset
+                        className="grid gap-2"
+                        aria-describedby="managed-barangays-error"
+                    >
                         <legend className="text-base font-semibold">
                             Barangays this admin handles
                         </legend>
@@ -350,6 +353,7 @@ function StaffForm({
                                     className="flex min-h-12 items-center gap-3 rounded-lg border-2 border-slate-200 px-3 text-base dark:border-border"
                                 >
                                     <Checkbox
+                                        id={'managed-barangay-${barangay.id}'}
                                         checked={data.managed_barangay_ids.includes(
                                             barangay.id,
                                         )}
@@ -365,6 +369,7 @@ function StaffForm({
                             ))
                         )}
                         <InputError
+                            id="managed-barangays-error"
                             message={
                                 errors.managed_barangay_ids ??
                                 errors['managed_barangay_ids.0']

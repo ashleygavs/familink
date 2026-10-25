@@ -13,7 +13,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import ReliefController from '@/actions/App/Http/Controllers/ReliefController';
-import InputError from '@/components/input-error';
+import InputError, { fieldError } from '@/components/input-error';
 import { ChoiceSelect, Field } from '@/components/registration/field';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -309,6 +309,7 @@ export default function QRScanner({
                         <div className="grid gap-3 rounded-xl border-2 border-slate-200 p-4 dark:border-border">
                             <label className="flex min-h-12 items-center gap-3 text-lg font-semibold">
                                 <Checkbox
+                                    id="collecting"
                                     checked={collecting}
                                     onCheckedChange={(checked) =>
                                         setCollecting(checked === true)
@@ -360,6 +361,7 @@ export default function QRScanner({
                                     </Field>
                                     <label className="flex min-h-12 items-center gap-3 rounded-lg border-2 border-slate-200 px-3 text-base dark:border-border">
                                         <Checkbox
+                                            id="representative-verified"
                                             checked={representative.verified}
                                             onCheckedChange={(checked) =>
                                                 setRepresentative({
@@ -415,6 +417,10 @@ export default function QRScanner({
                                     value={manualCode}
                                     autoComplete="off"
                                     placeholder="FL-2026-SJ-00001"
+                                    {...fieldError(
+                                        'manual-code',
+                                        problem ?? undefined,
+                                    )}
                                     onChange={(inputEvent) =>
                                         setManualCode(inputEvent.target.value)
                                     }
@@ -427,7 +433,10 @@ export default function QRScanner({
                                 <Keyboard />
                                 Check this ID
                             </Button>
-                            <InputError message={problem ?? undefined} />
+                            <InputError
+                                id="manual-code-error"
+                                message={problem ?? undefined}
+                            />
                         </form>
 
                         <p className="text-center text-lg text-muted-foreground">

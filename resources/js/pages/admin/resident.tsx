@@ -18,6 +18,7 @@ import type { FormEvent } from 'react';
 import ResidentCardController from '@/actions/App/Http/Controllers/ResidentCardController';
 import ResidentManagementController from '@/actions/App/Http/Controllers/ResidentManagementController';
 import { ResidentSummary } from '@/components/parent-selector';
+import InputError from '@/components/input-error';
 import { ChoiceSelect, Field } from '@/components/registration/field';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
@@ -399,7 +400,10 @@ function EndMarriageDialog({
                         />
                     </Field>
                     {maidenNameChoices.length > 0 && (
-                        <fieldset className="grid gap-2">
+                        <fieldset
+                            className="grid gap-2"
+                            aria-describedby="maiden-error"
+                        >
                             <legend className="text-base font-semibold">
                                 Go back to the maiden name
                             </legend>
@@ -409,6 +413,7 @@ function EndMarriageDialog({
                                     className="flex min-h-12 items-center gap-3 rounded-lg border-2 border-slate-200 px-3 text-base dark:border-border"
                                 >
                                     <Checkbox
+                                        id={'maiden-${person.id}'}
                                         checked={form.data.restore_maiden_name_ids.includes(
                                             person.id,
                                         )}
@@ -420,7 +425,8 @@ function EndMarriageDialog({
                                     {person.maiden_name}
                                 </label>
                             ))}
-                            <InputErrorLine
+                            <InputError
+                                id="maiden-error"
                                 message={form.errors.restore_maiden_name_ids}
                             />
                         </fieldset>
@@ -605,6 +611,15 @@ function MoveDialog({
                     )}
                     <label className="flex min-h-12 items-center gap-3 rounded-lg border-2 border-slate-200 px-3 text-base dark:border-border">
                         <Checkbox
+                            id="move-is-head"
+                            aria-invalid={
+                                form.errors.is_head ? true : undefined
+                            }
+                            aria-describedby={
+                                form.errors.is_head
+                                    ? 'move-is-head-error'
+                                    : undefined
+                            }
                             checked={form.data.is_head}
                             onCheckedChange={(checked) =>
                                 form.setData('is_head', checked === true)
@@ -612,7 +627,10 @@ function MoveDialog({
                         />
                         This person is the head of that household
                     </label>
-                    <InputErrorLine message={form.errors.is_head} />
+                    <InputError
+                        id="move-is-head-error"
+                        message={form.errors.is_head}
+                    />
                     {!form.data.is_head && (
                         <Field
                             id="move-role"
@@ -919,12 +937,6 @@ function CorrectionDialog({
             </DialogContent>
         </Dialog>
     );
-}
-
-function InputErrorLine({ message }: { message?: string }) {
-    return message ? (
-        <p className="text-base font-semibold text-red-700">{message}</p>
-    ) : null;
 }
 
 export default function ManageResident({

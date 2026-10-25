@@ -1,7 +1,7 @@
 import { Form, Head, setLayoutProps } from '@inertiajs/react';
 import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import { useMemo, useState } from 'react';
-import InputError from '@/components/input-error';
+import InputError, { fieldError } from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -65,6 +65,12 @@ export default function TwoFactorChallenge() {
                             {showRecoveryInput ? (
                                 <>
                                     <Input
+                                        id="recovery_code"
+                                        aria-label="Recovery code"
+                                        {...fieldError(
+                                            'recovery_code',
+                                            errors.recovery_code,
+                                        )}
                                         name="recovery_code"
                                         type="text"
                                         placeholder="Enter recovery code"
@@ -72,6 +78,7 @@ export default function TwoFactorChallenge() {
                                         required
                                     />
                                     <InputError
+                                        id="recovery_code-error"
                                         message={errors.recovery_code}
                                     />
                                 </>
@@ -79,6 +86,9 @@ export default function TwoFactorChallenge() {
                                 <div className="flex flex-col items-center justify-center space-y-3 text-center">
                                     <div className="flex w-full items-center justify-center">
                                         <InputOTP
+                                            id="code"
+                                            aria-label="6-digit code"
+                                            {...fieldError('code', errors.code)}
                                             name="code"
                                             maxLength={OTP_MAX_LENGTH}
                                             value={code}
@@ -100,7 +110,10 @@ export default function TwoFactorChallenge() {
                                             </InputOTPGroup>
                                         </InputOTP>
                                     </div>
-                                    <InputError message={errors.code} />
+                                    <InputError
+                                        id="code-error"
+                                        message={errors.code}
+                                    />
                                 </div>
                             )}
 

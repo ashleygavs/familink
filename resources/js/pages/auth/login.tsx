@@ -1,6 +1,6 @@
 import { Form, Head } from '@inertiajs/react';
 import { Lock, LogIn, Mail } from 'lucide-react';
-import InputError from '@/components/input-error';
+import InputError, { fieldError } from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
@@ -46,9 +46,13 @@ export default function Login({ status, canResetPassword }: Props) {
                                         autoComplete="email"
                                         className="pl-11"
                                         placeholder="e.g. juan@familink.gov.ph"
+                                        {...fieldError('email', errors.email)}
                                     />
                                 </div>
-                                <InputError message={errors.email} />
+                                <InputError
+                                    id="email-error"
+                                    message={errors.email}
+                                />
                             </div>
 
                             <div className="grid gap-2">
@@ -74,9 +78,16 @@ export default function Login({ status, canResetPassword }: Props) {
                                         autoComplete="current-password"
                                         className="pl-11"
                                         placeholder="Enter your password"
+                                        {...fieldError(
+                                            'password',
+                                            errors.password,
+                                        )}
                                     />
                                 </div>
-                                <InputError message={errors.password} />
+                                <InputError
+                                    id="password-error"
+                                    message={errors.password}
+                                />
                             </div>
 
                             <div className="flex items-center space-x-3">

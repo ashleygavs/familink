@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { cloneElement, isValidElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import InputError from '@/components/input-error';
 import { Label } from '@/components/ui/label';
 import {
@@ -22,12 +23,38 @@ export function Field({
     hint?: string;
     children: ReactNode;
 }) {
+    const own = isValidElement(children)
+        ? (children.props as Record<string, unknown>)
+        : {};
+    const describedBy =
+        [
+            own['aria-describedby'] as string | undefined,
+            error && `${id}-error`,
+            hint && `${id}-hint`,
+        ]
+            .filter(Boolean)
+            .join(' ') || undefined;
+
+    // The one control inside is told it is wrong and where its message is, so a screen reader reads both together.
+    const control = isValidElement(children)
+        ? cloneElement(children as ReactElement<Record<string, unknown>>, {
+              'aria-invalid': error || own['aria-invalid'] ? true : undefined,
+              'aria-describedby': describedBy,
+          })
+        : children;
     return (
         <div className="grid gap-2">
             <Label htmlFor={id}>{label}</Label>
-            {children}
-            {hint && <p className="text-base text-muted-foreground">{hint}</p>}
-            <InputError message={error} />
+            {control}
+            {hint && (
+                <p
+                    id={`${id}-hint`}
+                    className="text-base text-muted-foreground"
+                >
+                    {hint}
+                </p>
+            )}
+            <InputError id={`${id}-error`} message={error} />
         </div>
     );
 }
@@ -39,6 +66,7 @@ export function ChoiceSelect({
     values,
     onChange,
     className = 'w-full',
+    ...aria
 }: {
     id: string;
     value: string;
@@ -46,10 +74,12 @@ export function ChoiceSelect({
     values: { value: string; label: string }[];
     onChange: (value: string) => void;
     className?: string;
+    'aria-invalid'?: boolean;
+    'aria-describedby'?: string;
 }) {
     return (
         <Select value={value} onValueChange={onChange}>
-            <SelectTrigger id={id} className={className}>
+            <SelectTrigger id={id} className={className} {...aria}>
                 <SelectValue placeholder={placeholder} />
             </SelectTrigger>
             <SelectContent>
@@ -73,10 +103,13 @@ export function SuffixSelect({
     id,
     value,
     onChange,
+    ...aria
 }: {
     id: string;
     value: string;
     onChange: (value: string) => void;
+    'aria-invalid'?: boolean;
+    'aria-describedby'?: string;
 }) {
     return (
         <ChoiceSelect
@@ -91,6 +124,7 @@ export function SuffixSelect({
                 })),
             ]}
             onChange={(chosen) => onChange(chosen === 'none' ? '' : chosen)}
+            {...aria}
         />
     );
 }

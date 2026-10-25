@@ -383,6 +383,7 @@ export default function DistributionList({
                         </div>
                         <label className="flex min-h-12 min-w-0 items-center gap-3 self-end rounded-lg border-2 border-slate-200 px-3 text-base dark:border-border">
                             <Checkbox
+                                id="only-unclaimed"
                                 checked={filters.only_unclaimed}
                                 onCheckedChange={(checked) =>
                                     apply({ only_unclaimed: checked === true })

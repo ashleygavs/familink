@@ -3,7 +3,7 @@ import { REGEXP_ONLY_DIGITS } from 'input-otp';
 import { Check, Copy, ScanLine } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AlertError from '@/components/alert-error';
-import InputError from '@/components/input-error';
+import InputError, { fieldError } from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -176,6 +176,12 @@ function TwoFactorVerificationStep({
                         <div className="flex w-full flex-col items-center space-y-3 py-2">
                             <InputOTP
                                 id="otp"
+                                aria-label="6-digit code"
+                                {...fieldError(
+                                    'otp',
+                                    errors?.confirmTwoFactorAuthentication
+                                        ?.code,
+                                )}
                                 name="code"
                                 maxLength={OTP_MAX_LENGTH}
                                 onChange={setCode}
@@ -196,6 +202,7 @@ function TwoFactorVerificationStep({
                                 </InputOTPGroup>
                             </InputOTP>
                             <InputError
+                                id="otp-error"
                                 message={
                                     errors?.confirmTwoFactorAuthentication?.code
                                 }

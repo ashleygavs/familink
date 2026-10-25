@@ -1,6 +1,6 @@
 import { Pencil, ShieldCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
-import InputError from '@/components/input-error';
+import InputError, { fieldError } from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -225,6 +225,7 @@ export function StepReview({
                     <div className="flex items-start gap-3">
                         <Checkbox
                             id="consent"
+                            {...fieldError('consent', errors.consent)}
                             checked={draft.consent}
                             onCheckedChange={(checked) => {
                                 update({ consent: checked === true });
@@ -242,7 +243,7 @@ export function StepReview({
                             that this information is correct.
                         </Label>
                     </div>
-                    <InputError message={errors.consent} />
+                    <InputError id="consent-error" message={errors.consent} />
                 </div>
             )}
         </div>

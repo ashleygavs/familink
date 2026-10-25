@@ -1,4 +1,5 @@
 import { Home, X } from 'lucide-react';
+import InputError from '@/components/input-error';
 import { SearchSelect } from '@/components/search-select';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -58,7 +59,7 @@ export function HouseholdSelector({
                         Change
                     </Button>
                 </div>
-                <InputErrorText message={error} />
+                <InputError message={error} />
             </div>
         );
     }
@@ -84,10 +85,4 @@ export function HouseholdSelector({
             onSelect={onChange}
         />
     );
-}
-
-function InputErrorText({ message }: { message?: string }) {
-    return message ? (
-        <p className="text-base font-semibold text-red-600">{message}</p>
-    ) : null;
 }

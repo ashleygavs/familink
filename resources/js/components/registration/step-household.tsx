@@ -1,6 +1,6 @@
 import { Home, MapPin } from 'lucide-react';
 import { HouseholdSelector } from '@/components/household-selector';
-import InputError from '@/components/input-error';
+import InputError, { fieldError } from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -178,6 +178,7 @@ export function StepHousehold({
                 <div className="flex items-start gap-3">
                     <Checkbox
                         id="is_head"
+                        {...fieldError('is_head', errors.is_head)}
                         checked={household.is_head}
                         onCheckedChange={(checked) =>
                             set({ is_head: checked === true })
@@ -195,7 +196,7 @@ export function StepHousehold({
                         </p>
                     </div>
                 </div>
-                <InputError message={errors.is_head} />
+                <InputError id="is_head-error" message={errors.is_head} />
 
                 {!household.is_head && (
                     <Field
