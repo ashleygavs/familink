@@ -183,6 +183,7 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 **Data Check and Relationship Finder**
 - [ ] Open **Data Check**. With the seed data it says no problems were found.
 - [ ] To see a problem: on a resident's **Update** page set a birthdate that makes a parent younger than the child, or record a marriage on only one person. Reload **Data Check**: the problem is listed in plain words, with **Open** (the person) and **Family tree** buttons. Fix it and reload: it is gone.
+- [ ] Two more checks: **Possibly registered twice** (two records with the same name and birthdate; each lists the other record's ID) and **Civil status does not match the family record** (a husband or wife is recorded but the status is not Married, or the husband or wife has died and the status still says Married). A person who is Married with nobody recorded is not flagged. As an admin you only see a duplicate when both records are in barangays you handle.
 - [ ] Open **Relationship Finder**. Type part of a name or a resident ID in **First person** and pick someone from the list, then do the same for **Second person**. It says what each is to the other, such as 'Ana is Ben's aunt' and 'Ben is Ana's nephew'.
 - [ ] Try two people from different families: it says no family link was found. **Swap the two people** reverses them, and **Change** picks someone else.
 

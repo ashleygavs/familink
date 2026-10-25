@@ -30,8 +30,8 @@ beforeEach(function () {
 
 it('finds nothing in healthy family records', function () {
     $father = ($this->person)(['birthdate' => now()->subYears(60)]);
-    $mother = ($this->person)(['gender' => 'Female', 'birthdate' => now()->subYears(58), 'spouse_id' => $father->id]);
-    $father->update(['spouse_id' => $mother->id]);
+    $mother = ($this->person)(['gender' => 'Female', 'birthdate' => now()->subYears(58), 'spouse_id' => $father->id, 'civil_status' => 'Married']);
+    $father->update(['spouse_id' => $mother->id, 'civil_status' => 'Married']);
     ($this->person)(['father_id' => $father->id, 'mother_id' => $mother->id, 'birthdate' => now()->subYears(30)]);
 
     $result = ($this->check)();
@@ -164,4 +164,67 @@ it('shows the page to an admin and a stakeholder but not an encoder', function (
     $this->actingAs($this->stakeholder)->get(route('reports.data-check'))->assertOk()
         ->assertInertia(fn ($page) => $page->where('canFix', false));
     $this->actingAs($this->encoder)->get(route('reports.data-check'))->assertForbidden();
+});
+
+it('finds two records with the same name and birthdate, and names the other record', function () {
+    $birthdate = now()->subYears(35)->startOfDay();
+    $first = ($this->person)(['first_name' => 'Juan', 'last_name' => 'Dela Cruz', 'birthdate' => $birthdate]);
+    $second = ($this->person)(['first_name' => 'JUAN', 'last_name' => 'dela cruz', 'birthdate' => $birthdate, 'status' => ResidentStatus::Listed]);
+    ($this->person)(['first_name' => 'Juan', 'last_name' => 'Dela Cruz', 'birthdate' => $birthdate->copy()->subDay()]);
+
+    $group = collect(($this->check)()['groups'])->firstWhere('type', 'duplicate');
+    $texts = collect($group['problems'])->pluck('text', 'resident_id');
+
+    expect($group['total'])->toBe(2)
+        ->and($texts[$first->id])->toContain($second->system_id_no)->toContain('(listed by a family member)')
+        ->and($texts[$second->id])->toContain($first->system_id_no);
+});
+
+it('does not call archived records or different birthdates duplicates', function () {
+    $birthdate = now()->subYears(35)->startOfDay();
+    ($this->person)(['first_name' => 'Ana', 'last_name' => 'Reyes', 'birthdate' => $birthdate]);
+    ($this->person)(['first_name' => 'Ana', 'last_name' => 'Reyes', 'birthdate' => $birthdate, 'status' => ResidentStatus::Archived]);
+
+    expect(($this->types)(($this->check)()))->not->toContain('duplicate');
+});
+
+it('compares only the people the viewer can see when looking for duplicates', function () {
+    $birthdate = now()->subYears(35)->startOfDay();
+    $outside = Household::factory()->create(['barangay_id' => $this->other->id]);
+    ($this->person)(['first_name' => 'Ana', 'last_name' => 'Reyes', 'birthdate' => $birthdate]);
+    ($this->person)(['first_name' => 'Ana', 'last_name' => 'Reyes', 'birthdate' => $birthdate], $outside);
+
+    expect(($this->types)(($this->check)()))->not->toContain('duplicate')
+        ->and(($this->types)(($this->check)($this->stakeholder)))->toContain('duplicate');
+});
+
+it('finds a living husband or wife recorded while the civil status is not Married', function () {
+    $husband = ($this->person)(['civil_status' => 'Married']);
+    $wife = ($this->person)(['gender' => 'Female', 'civil_status' => 'Single', 'spouse_id' => $husband->id]);
+    $husband->update(['spouse_id' => $wife->id]);
+
+    $group = collect(($this->check)()['groups'])->firstWhere('type', 'civil_status');
+
+    expect($group['total'])->toBe(1)->and($group['problems'][0]['resident_id'])->toBe($wife->id)
+        ->and($group['problems'][0]['text'])->toContain('civil status says Single');
+});
+
+it('finds a person still recorded as Married after their husband or wife died', function () {
+    $husband = ($this->person)(['civil_status' => 'Married', 'is_deceased' => true, 'deceased_at' => now()->subYear()]);
+    $wife = ($this->person)(['gender' => 'Female', 'civil_status' => 'Married', 'spouse_id' => $husband->id]);
+    $husband->update(['spouse_id' => $wife->id]);
+
+    $group = collect(($this->check)()['groups'])->firstWhere('type', 'civil_status');
+
+    expect($group['total'])->toBe(1)->and($group['problems'][0]['resident_id'])->toBe($wife->id)
+        ->and($group['problems'][0]['text'])->toContain('It should say Widowed');
+});
+
+it('accepts a widow or widower, and leaves Married with nobody recorded alone', function () {
+    $husband = ($this->person)(['civil_status' => 'Widowed', 'is_deceased' => false]);
+    $late = ($this->person)(['gender' => 'Female', 'civil_status' => 'Married', 'is_deceased' => true, 'deceased_at' => now()->subYear(), 'spouse_id' => $husband->id]);
+    $husband->update(['spouse_id' => $late->id]);
+    ($this->person)(['civil_status' => 'Married']);
+
+    expect(($this->types)(($this->check)()))->not->toContain('civil_status');
 });
