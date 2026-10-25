@@ -130,6 +130,7 @@ return [
         'symbols' => 'The :attribute needs at least one symbol, like ! or #.',
         'uncompromised' => 'This :attribute has appeared in a public data leak, so it is not safe. Please choose a different one.',
     ],
+    'password_reused' => 'Please choose a password you have not been using.',
     'present' => 'Please fill in the :attribute.',
     'present_if' => 'The :attribute field must be present when :other is :value.',
     'present_unless' => 'The :attribute field must be present unless :other is :value.',

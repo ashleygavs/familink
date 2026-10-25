@@ -16,7 +16,7 @@ export default function AuthSimpleLayout({
     description,
 }: AuthLayoutProps) {
     return (
-        <div
+        <main
             className="flex min-h-svh flex-col items-center justify-center bg-sky-50/50 p-6 md:p-10 dark:bg-background"
             style={gridBackground}
         >
@@ -45,6 +45,6 @@ export default function AuthSimpleLayout({
                     {children}
                 </div>
             </div>
-        </div>
+        </main>
     );
 }

@@ -320,6 +320,9 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 - [ ] The sidebar collapses to icons and expands again with nothing cut off.
 - [ ] **Log Out** works, and the back button does not return to a private page.
 - [ ] A wrong password shows a clear error. Five wrong attempts in a minute are slowed down.
+- [ ] On the login page, press **Tab** repeatedly: the focus goes email, password, Remember me, Log in, in that order, with no jumps.
+- [ ] Start registering a resident (type a name, do not finish), then wait for the session to expire or open the login page in the same tab. Expected: after logging in again, **Register Resident** starts empty. A saved half-filled form never stays on a logged-out screen.
+- [ ] In **Settings > Security**, change the password to the same password you have now. Expected: "Please choose a password you have not been using." A different password works.
 - [ ] Two encoders scanning the same household in two browsers at once: only one claim succeeds.
 - [ ] The register stepper works on a phone-width window (about 400 pixels).
 

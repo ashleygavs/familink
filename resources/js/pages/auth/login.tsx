@@ -1,5 +1,6 @@
 import { Form, Head } from '@inertiajs/react';
 import { Lock, LogIn, Mail } from 'lucide-react';
+import { useEffect } from 'react';
 import InputError, { fieldError } from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
 import TextLink from '@/components/text-link';
@@ -8,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { clearRegistrationDrafts } from '@/lib/registration-draft';
 import { store } from '@/routes/login';
 import { request } from '@/routes/password';
 import PasskeyVerify from '@/components/passkey-verify';
@@ -18,6 +20,11 @@ type Props = {
 };
 
 export default function Login({ status, canResetPassword }: Props) {
+    // Anyone who reaches the login page is signed out, so no half-filled registration should stay in this tab.
+    useEffect(() => {
+        clearRegistrationDrafts();
+    }, []);
+
     return (
         <>
             <Head title="Log in" />
@@ -42,7 +49,6 @@ export default function Login({ status, canResetPassword }: Props) {
                                         name="email"
                                         required
                                         autoFocus
-                                        tabIndex={1}
                                         autoComplete="email"
                                         className="pl-11"
                                         placeholder="e.g. juan@familink.gov.ph"
@@ -62,7 +68,6 @@ export default function Login({ status, canResetPassword }: Props) {
                                         <TextLink
                                             href={request()}
                                             className="ml-auto text-base"
-                                            tabIndex={5}
                                         >
                                             Forgot your password?
                                         </TextLink>
@@ -74,7 +79,6 @@ export default function Login({ status, canResetPassword }: Props) {
                                         id="password"
                                         name="password"
                                         required
-                                        tabIndex={2}
                                         autoComplete="current-password"
                                         className="pl-11"
                                         placeholder="Enter your password"
@@ -91,11 +95,7 @@ export default function Login({ status, canResetPassword }: Props) {
                             </div>
 
                             <div className="flex items-center space-x-3">
-                                <Checkbox
-                                    id="remember"
-                                    name="remember"
-                                    tabIndex={3}
-                                />
+                                <Checkbox id="remember" name="remember" />
                                 <Label
                                     htmlFor="remember"
                                     className="font-medium"
@@ -107,7 +107,6 @@ export default function Login({ status, canResetPassword }: Props) {
                             <Button
                                 type="submit"
                                 className="mt-4 h-12 w-full bg-blue-600 text-lg hover:bg-blue-700"
-                                tabIndex={4}
                                 disabled={processing}
                                 data-test="login-button"
                             >
