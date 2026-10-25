@@ -2,6 +2,7 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import { LogIn, ShieldCheck } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { dashboard, login } from '@/routes';
 
 const gridBackground: CSSProperties = {
@@ -32,10 +33,10 @@ export default function Welcome() {
                 </p>
                 <Link
                     href={auth.user ? dashboard() : login()}
-                    className={buttonVariants({
-                        size: 'lg',
-                        className: 'bg-blue-600 hover:bg-blue-700',
-                    })}
+                    className={cn(
+                        buttonVariants({ size: 'lg' }),
+                        'bg-blue-600 hover:bg-blue-700',
+                    )}
                 >
                     <LogIn />
                     {auth.user ? 'Go to Dashboard' : 'Log In to FamiLink'}

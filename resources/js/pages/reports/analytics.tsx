@@ -378,7 +378,7 @@ export default function Analytics({
                                             <td className="py-2 pr-4 font-semibold">
                                                 <button
                                                     type="button"
-                                                    className="text-left underline-offset-2 hover:underline"
+                                                    className="min-h-11 text-left underline-offset-2 hover:underline"
                                                     onClick={() =>
                                                         apply({
                                                             barangay:

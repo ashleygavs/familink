@@ -13,7 +13,7 @@ export default function AppLogo() {
                 <span className="truncate text-lg font-bold text-blue-900 dark:text-white">
                     {name}
                 </span>
-                <span className="truncate text-xs text-muted-foreground">
+                <span className="truncate text-sm text-muted-foreground">
                     Family & Relief Governance
                 </span>
             </div>

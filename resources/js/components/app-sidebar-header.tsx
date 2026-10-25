@@ -6,6 +6,7 @@ import { buttonVariants } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { clearRegistrationDrafts } from '@/lib/registration-draft';
+import { cn } from '@/lib/utils';
 import { logout } from '@/routes';
 import type { BreadcrumbItem as BreadcrumbItemType } from '@/types';
 
@@ -26,12 +27,12 @@ export function AppSidebarHeader({
     return (
         <header className="sticky top-0 z-20 flex min-h-16 shrink-0 items-center justify-between gap-3 border-b-2 border-blue-200 bg-white/95 px-4 backdrop-blur dark:border-sidebar-border dark:bg-background/95 print:hidden">
             <div className="flex min-w-0 items-center gap-2">
-                <SidebarTrigger className="-ml-1 size-12" />
+                <SidebarTrigger className="-ml-1 size-12 shrink-0" />
                 <div className="flex items-center gap-2 md:hidden">
                     <span className="flex size-9 items-center justify-center rounded-lg bg-blue-600 text-white">
                         <ShieldCheck className="size-5" />
                     </span>
-                    <span className="text-lg font-bold text-blue-900 dark:text-white">
+                    <span className="hidden text-lg font-bold text-blue-900 min-[480px]:inline dark:text-white">
                         {name}
                     </span>
                 </div>
@@ -56,7 +57,7 @@ export function AppSidebarHeader({
                     href={logout()}
                     as="button"
                     onClick={handleLogout}
-                    className={buttonVariants({ variant: 'outline' })}
+                    className={cn(buttonVariants({ variant: 'outline' }))}
                     data-test="header-logout-button"
                 >
                     <LogOut />
