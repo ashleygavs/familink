@@ -287,7 +287,10 @@ export function StepFamilyExisting({
                         icon={Search}
                         selected={draft.spouse}
                         onChange={(resident) => update({ spouse: resident })}
-                        params={{ without_spouse: true }}
+                        params={{
+                            without_spouse: true,
+                            barangay_id: barangayId,
+                        }}
                         error={errors.spouse_id}
                     />
                     <DependentsSelector

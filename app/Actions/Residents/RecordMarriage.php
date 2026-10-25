@@ -89,7 +89,7 @@ class RecordMarriage
                 $fail("{$person->full_name} must be an approved, living resident.");
             }
 
-            if ($person->spouse_id !== null && ! $person->spouse?->is_deceased) {
+            if (app(MarriageRules::class)->hasLivingSpouse($person)) {
                 $fail("{$person->full_name} already has a spouse on record.");
             }
 
@@ -112,12 +112,6 @@ class RecordMarriage
      */
     public function areCloseRelatives(Resident $first, Resident $second): bool
     {
-        $parentAndChild = in_array($second->id, [$first->father_id, $first->mother_id], true)
-            || in_array($first->id, [$second->father_id, $second->mother_id], true);
-
-        $siblings = ($first->father_id !== null && $first->father_id === $second->father_id)
-            || ($first->mother_id !== null && $first->mother_id === $second->mother_id);
-
-        return $parentAndChild || $siblings;
+        return app(MarriageRules::class)->areCloseRelatives($first, $second);
     }
 }

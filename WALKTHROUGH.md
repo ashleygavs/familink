@@ -79,6 +79,7 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 - [ ] Try to register the same name and birthdate again. Expected: a clear "already registered" message.
 - [ ] Try a father who is younger than the child, or a mother born after the child. Expected: refused with a reason.
 - [ ] In **Register Resident**, search for a parent who lives in another barangay (for example a Cabalantian person from San Jose). The result shows the name, gender, birth year and barangay only: no resident ID, exact birthdate or address. People of your own barangay still show everything.
+- [ ] In **Register Resident**, try to choose a **Spouse** who lives in another barangay. The search only offers people of your own barangay. If a request is forced through anyway, it is refused: "You can only link a husband or wife who lives in a barangay you handle." Choosing someone who is already married to a living person, or who is archived or deceased, is refused with a plain reason. A widow or widower can be linked, and both people then show as Married.
 
 **Residents page and QR cards**
 - [ ] Open **Residents**. Search "Juan", then "FL-2026-SJ-00002", then "HH-SJ-0001": each finds the right person.
@@ -135,6 +136,7 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 
 **Login and menu**
 - [ ] After login you land on **Approvals**. The header shows "Bacolor: San Jose".
+- [ ] When you confirm a suggested **spouse** for a waiting resident, both people become Married and are linked both ways. A spouse from a barangay you do not handle is never linked, and that person's record is not changed.
 - [ ] The menu shows: Dashboard, Residents, Approvals, Relief Events, Suggestion Report, Analytics, Users.
 
 **Approvals**

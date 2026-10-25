@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Concerns;
 
+use App\Actions\Residents\MarriageRules;
 use App\Enums\Gender;
 use App\Enums\ResidentStatus;
 use App\Models\Resident;
@@ -33,7 +34,7 @@ trait ValidatesFamilyLinks
         return [
             'father_id' => ['nullable', 'integer', Rule::exists('residents', 'id')->where('gender', Gender::Male->value)->whereNot('status', $notArchived)],
             'mother_id' => ['nullable', 'integer', Rule::exists('residents', 'id')->where('gender', Gender::Female->value)->whereNot('status', $notArchived)],
-            'spouse_id' => ['nullable', 'integer', Rule::exists('residents', 'id')->whereNull('spouse_id')->whereNot('status', $notArchived)],
+            'spouse_id' => ['nullable', 'integer', Rule::exists('residents', 'id')->whereNot('status', $notArchived)],
             'dependent_ids' => ['nullable', 'array', 'max:20'],
             'dependent_ids.*' => [
                 'integer',
@@ -51,7 +52,7 @@ trait ValidatesFamilyLinks
         return [
             'father_id.exists' => 'Please choose a male, active resident as the father.',
             'mother_id.exists' => 'Please choose a female, active resident as the mother.',
-            'spouse_id.exists' => 'That resident is not available as a spouse (already linked to a spouse or archived).',
+            'spouse_id.exists' => 'Please choose a registered resident as the husband or wife.',
             'dependent_ids.*.exists' => 'One of the chosen children is not available in this barangay.',
         ];
     }
@@ -135,6 +136,22 @@ trait ValidatesFamilyLinks
         }
 
         if ($spouse === null) {
+            return;
+        }
+
+        // Linking a spouse also writes to the other person's record, so they must be someone this user may work with:
+        // the same barangays as "Record a marriage".
+        if (! Resident::query()->visibleTo($this->user())->whereKey($spouse->id)->exists()) {
+            $validator->errors()->add('spouse_id', 'You can only link a husband or wife who lives in a barangay you handle.');
+
+            return;
+        }
+
+        $problem = app(MarriageRules::class)->linkProblem($spouse);
+
+        if ($problem !== null) {
+            $validator->errors()->add('spouse_id', $problem);
+
             return;
         }
 
