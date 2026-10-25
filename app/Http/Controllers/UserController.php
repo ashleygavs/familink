@@ -240,7 +240,9 @@ class UserController extends Controller
         $data = $request->validated();
         $role = RoleName::from($data['role']);
 
-        DB::transaction(function () use ($user, $data, $role): void {
+        $actor = $request->user();
+
+        DB::transaction(function () use ($user, $data, $role, $actor): void {
             $user->forceFill([
                 'name' => $this->staffName($role, $data) ?? $data['name'],
                 'email' => $data['email'],
@@ -251,6 +253,11 @@ class UserController extends Controller
 
             if (! empty($data['password'])) {
                 $user->password = $data['password'];
+
+                // A password someone else chose is only for the first login: the person picks their own after it.
+                if ($actor->isNot($user)) {
+                    $user->must_change_password = true;
+                }
             }
 
             if (! $user->exists) {

@@ -18,6 +18,7 @@ export type Auth = {
     barangay_id: number | null;
     barangay_name: string | null;
     scope_label: string | null;
+    must_change_password: boolean;
 };
 
 export type Passkey = {

@@ -266,8 +266,8 @@ function StaffForm({
                 label={editing ? 'New password' : 'Password'}
                 hint={
                     editing
-                        ? 'Leave empty to keep the current password.'
-                        : undefined
+                        ? 'Leave empty to keep the current password. A password you set here is only for their first login: they will be asked to choose their own.'
+                        : 'It is only for their first login: they will be asked to choose their own.'
                 }
                 error={errors.password}
             >

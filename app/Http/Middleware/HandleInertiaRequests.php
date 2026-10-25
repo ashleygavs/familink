@@ -44,6 +44,7 @@ class HandleInertiaRequests extends Middleware
                 'barangay_id' => $request->user()?->barangay_id,
                 'barangay_name' => $request->user()?->barangay?->name,
                 'scope_label' => $request->user()?->scopeLabel(),
+                'must_change_password' => (bool) $request->user()?->must_change_password,
             ],
             'flash' => [
                 'status' => fn () => $request->session()->get('status'),

@@ -69,7 +69,7 @@ it('says a password was set without saying what it is', function () {
 
     $change = UserChange::query()->sole();
 
-    expect($change->summary)->toBe('A new password was set.')->and(json_encode($change->toArray()))->not->toContain('another-long-safe-password');
+    expect($change->summary)->toBe('A temporary password was set. The person must choose their own at the next login.')->and(json_encode($change->toArray()))->not->toContain('another-long-safe-password');
 });
 
 it('records nothing when a save changes nothing', function () {

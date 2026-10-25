@@ -61,12 +61,24 @@ class RecordUserChange
         }
 
         $summary = $parts === [] ? '' : 'Changed '.implode('; ', $parts).'.';
-        $summary = trim($summary.($passwordChanged ? ' A new password was set.' : ''));
+        $summary = trim($summary.($passwordChanged ? ($actor->is($user) ? ' A new password was set.' : ' A temporary password was set. The person must choose their own at the next login.') : ''));
 
         $this->write($actor, $user, UserChange::UPDATED, $summary, [
             'before' => array_intersect_key($before, array_flip($changed)),
             'after' => array_intersect_key($after, array_flip($changed)),
             'password_changed' => $passwordChanged,
+        ]);
+    }
+
+    /**
+     * A password reset by whoever runs the server. There is no signed-in person to credit, and the history needs one, so
+     * the account itself is named, and the summary says where the reset came from.
+     */
+    public function resetFromServer(User $user): void
+    {
+        $this->write($user, $user, UserChange::UPDATED, 'Password reset from the server. A temporary password was set. The person must choose their own at the next login.', [
+            'password_changed' => true,
+            'from_server' => true,
         ]);
     }
 

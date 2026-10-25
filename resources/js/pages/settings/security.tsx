@@ -1,9 +1,10 @@
-import { Form, Head } from '@inertiajs/react';
+import { Form, Head, usePage } from '@inertiajs/react';
 import { useRef } from 'react';
 import SecurityController from '@/actions/App/Http/Controllers/Settings/SecurityController';
 import Heading from '@/components/heading';
 import InputError, { fieldError } from '@/components/input-error';
 import PasswordInput from '@/components/password-input';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { edit } from '@/routes/security';
@@ -21,12 +22,24 @@ type Props = {
 export default function Security(props: Props) {
     const passwordInput = useRef<HTMLInputElement>(null);
     const currentPasswordInput = useRef<HTMLInputElement>(null);
+    const { auth } = usePage().props;
 
     return (
         <>
             <Head title="Security settings" />
 
             <h1 className="sr-only">Security settings</h1>
+
+            {auth.must_change_password && (
+                <Alert className="mb-6">
+                    <AlertTitle>Please choose your own password</AlertTitle>
+                    <AlertDescription>
+                        An administrator set your password. Type it in Current
+                        password, then choose a new one that only you know. You
+                        can use FamiLink after you save it.
+                    </AlertDescription>
+                </Alert>
+            )}
 
             <div className="space-y-6">
                 <Heading
