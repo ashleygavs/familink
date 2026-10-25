@@ -83,7 +83,7 @@ it('only lets an active event change its title, end date and status', function (
     $event = ReliefEvent::factory()->create(['municipality_id' => $this->municipality->id, 'allocation_type' => 'Per Household', 'start_date' => '2026-10-01', 'end_date' => '2026-10-31']);
 
     $this->actingAs($this->admin)->put(route('admin.events.update', $event), eventPayload([
-        'title' => 'Renamed', 'allocation_type' => 'Per Resident', 'start_date' => '2026-09-01', 'end_date' => '2026-11-15', 'status' => 'Active',
+        'title' => 'Renamed', 'end_date' => '2026-11-15', 'status' => 'Active',
     ]))->assertSessionHasNoErrors();
 
     $fresh = $event->fresh();
@@ -92,6 +92,29 @@ it('only lets an active event change its title, end date and status', function (
         ->and($fresh->end_date->toDateString())->toBe('2026-11-15')
         ->and($fresh->allocation_type->value)->toBe('Per Household')
         ->and($fresh->start_date->toDateString())->toBe('2026-10-01');
+});
+
+it('refuses, with a message, a change to what an active event has locked', function () {
+    $event = ReliefEvent::factory()->create(['municipality_id' => $this->municipality->id, 'allocation_type' => 'Per Household', 'start_date' => '2026-10-01', 'end_date' => '2026-10-31']);
+
+    $this->actingAs($this->admin)->put(route('admin.events.update', $event), eventPayload([
+        'title' => 'Renamed', 'allocation_type' => 'Per Resident', 'start_date' => '2026-09-01', 'status' => 'Active',
+    ]))->assertSessionHasErrors([
+        'allocation_type' => 'This cannot be changed once the event is active. Only the title, the end date and the status can.',
+        'start_date' => 'This cannot be changed once the event is active. Only the title, the end date and the status can.',
+    ])->assertSessionDoesntHaveErrors(['municipality_id', 'title']);
+
+    expect($event->fresh()->title)->not->toBe('Renamed')->and($event->fresh()->allocation_type->value)->toBe('Per Household');
+});
+
+it('still lets a draft change everything', function () {
+    $event = ReliefEvent::factory()->draft()->create(['municipality_id' => $this->municipality->id, 'allocation_type' => 'Per Household', 'start_date' => '2026-10-01', 'end_date' => '2026-10-31']);
+
+    $this->actingAs($this->admin)->put(route('admin.events.update', $event), eventPayload([
+        'allocation_type' => 'Per Resident', 'start_date' => '2026-09-01', 'status' => 'Draft',
+    ]))->assertSessionHasNoErrors();
+
+    expect($event->fresh()->allocation_type->value)->toBe('Per Resident')->and($event->fresh()->start_date->toDateString())->toBe('2026-09-01');
 });
 
 it('stops an admin changing or deleting another municipality\'s event', function () {
@@ -156,7 +179,7 @@ it('lets a super admin change the limit of a draft while an admin cannot', funct
 
 it('locks the limit once the event is active, for everyone', function () {
     $event = ReliefEvent::factory()->perResident(2)->create(['municipality_id' => $this->municipality->id]);
-    $payload = eventPayload(['title' => $event->title, 'allocation_type' => 'Per Resident', 'status' => 'Active']);
+    $payload = eventPayload(['title' => $event->title, 'allocation_type' => 'Per Resident', 'status' => 'Active', 'start_date' => $event->start_date->toDateString(), 'end_date' => $event->end_date->toDateString()]);
 
     $this->actingAs($this->superAdmin)->put(route('admin.events.update', $event), [...$payload, 'max_claims_per_household' => 9])
         ->assertSessionHasErrors('max_claims_per_household');

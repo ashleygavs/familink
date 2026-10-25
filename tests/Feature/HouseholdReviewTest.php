@@ -239,7 +239,7 @@ it('needs a reason, two different households and access to one of them', functio
 
     $this->actingAs($this->admin)->post(route('admin.household-reviews.store'), [
         'first_household_id' => $elsewhere->id, 'second_household_id' => $alsoElsewhere->id, 'reason' => 'Not my barangay.',
-    ])->assertForbidden();
+    ])->assertNotFound();
 
     expect(HouseholdReview::query()->count())->toBe(0);
 });
@@ -272,7 +272,7 @@ it('does not let an admin reopen a pair from other barangays', function () {
         ...HouseholdReview::pair(($this->household)($this->other)->id, ($this->household)($this->other)->id),
     ]);
 
-    $this->actingAs($this->admin)->delete(route('admin.household-reviews.destroy', $review))->assertForbidden();
+    $this->actingAs($this->admin)->delete(route('admin.household-reviews.destroy', $review))->assertNotFound();
 
     expect(HouseholdReview::query()->count())->toBe(1);
 });

@@ -84,7 +84,7 @@ class HouseholdReviewController extends Controller
     {
         $barangays = Household::query()->whereIn('id', [$review->first_household_id, $review->second_household_id])->pluck('barangay_id');
 
-        abort_unless($barangays->contains(fn ($id): bool => $request->user()->canAccessBarangay((int) $id)), 403);
+        abort_unless($barangays->contains(fn ($id): bool => $request->user()->canAccessBarangay((int) $id)), 404);
 
         $review->delete();
 

@@ -8,6 +8,7 @@ use App\Enums\RoleName;
 use App\Models\ReliefEvent;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 
 class SaveReliefEventRequest extends FormRequest
@@ -64,7 +65,13 @@ class SaveReliefEventRequest extends FormRequest
         return [function (Validator $validator): void {
             $event = $this->route('event');
 
-            if ($validator->errors()->isNotEmpty() || ! $event instanceof ReliefEvent || ! $event->limitIsLocked() || ! $this->user()->hasRole(RoleName::SuperAdmin)) {
+            if ($validator->errors()->isNotEmpty() || ! $event instanceof ReliefEvent) {
+                return;
+            }
+
+            $this->refuseLockedChanges($validator, $event);
+
+            if (! $event->limitIsLocked() || ! $this->user()->hasRole(RoleName::SuperAdmin)) {
                 return;
             }
 
@@ -75,6 +82,27 @@ class SaveReliefEventRequest extends FormRequest
                 $validator->errors()->add('max_claims_per_household', 'The limit per household is locked once an event is active, so the rules cannot change during a distribution.');
             }
         }];
+    }
+
+    /**
+     * Once an event is Active, the municipality, the type and the start date cannot change. A request that tries is
+     * refused with a message, not quietly saved without them, so nobody believes they were changed.
+     */
+    private function refuseLockedChanges(Validator $validator, ReliefEvent $event): void
+    {
+        if ($event->status !== EventStatus::Active) {
+            return;
+        }
+
+        $changed = [
+            'municipality_id' => (int) $this->input('municipality_id') !== $event->municipality_id,
+            'allocation_type' => (string) $this->input('allocation_type') !== $event->allocation_type->value,
+            'start_date' => Carbon::parse((string) $this->input('start_date'))->toDateString() !== $event->start_date->toDateString(),
+        ];
+
+        foreach (array_keys(array_filter($changed)) as $field) {
+            $validator->errors()->add($field, 'This cannot be changed once the event is active. Only the title, the end date and the status can.');
+        }
     }
 
     /**

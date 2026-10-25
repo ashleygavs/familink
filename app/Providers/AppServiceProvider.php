@@ -20,7 +20,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // A live site never shows error details, even if the setting is left on by mistake.
+        if ($this->app->isProduction()) {
+            config(['app.debug' => false]);
+        }
+
+        // The Inertia developer tools record page data, so only a logged-in super admin may read it.
+        config(['inertia.devtools.middleware' => ['web', 'auth', 'role:super_admin']]);
     }
 
     /**

@@ -16,7 +16,10 @@ class StoreHouseholdReviewRequest extends FormRequest
             ->whereIn('id', [(int) $this->input('first_household_id'), (int) $this->input('second_household_id')])
             ->pluck('barangay_id');
 
-        return $barangays->isNotEmpty() && $barangays->contains(fn ($id): bool => $this->user()->canAccessBarangay((int) $id));
+        // Households outside the user's area, or that do not exist, answer the same: not found.
+        abort_unless($barangays->contains(fn ($id): bool => $this->user()->canAccessBarangay((int) $id)), 404);
+
+        return true;
     }
 
     /**

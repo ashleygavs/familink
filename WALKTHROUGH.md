@@ -153,7 +153,7 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 **Relief events**
 - [ ] Open **Relief Events**: the four Bacolor events are shown, and no Lubao event. Events belong to the whole municipality, so the Bacolor admins share them.
 - [ ] **New event**: create "Test Aid", Per Resident, start today, end next week, status Draft. Expected: it appears as Draft. You do not see a "Most members per household" box (only a super admin does).
-- [ ] **Activate** it. Expected: Active, "Open for scanning".
+- [ ] **Activate** it. Expected: Active, "Open for scanning". Open **Edit** again: the type, the municipality and the start date are greyed out. Only the title, the end date and the status can change. (A request that forces a change to a locked field is refused with "This cannot be changed once the event is active", it is never saved quietly.)
 - [ ] **Edit** the Active event: only name, end date and status can change. The type and start date are locked.
 - [ ] **Close** it and confirm. Expected: Closed, "Finished", and no Edit button.
 - [ ] Create another Draft and **Delete** it. Expected: gone.
@@ -344,7 +344,7 @@ Do these once, on the computer or host that people will really use. None of them
 - [ ] In the live .env: APP_ENV=production, APP_DEBUG=false, LOG_LEVEL=error, and APP_URL set to the https:// address. With APP_ENV=production the app already forces secure cookies, encrypted sessions and hides debug pages.
 - [ ] Keep errors on file without the log growing forever: in the live .env set LOG_STACK=daily (one file per day, the last 14 days are kept by default, or add LOG_DAILY_DAYS=30). Ask someone to read `storage/logs` once a week and tell you about anything marked ERROR. Errors are written there whether or not anyone is watching. Emailing errors can be added later, once real mail works.
 - [ ] On the live site, a mistyped address, a page your role cannot open, or a fault shows a friendly page ("We could not find that page", "Your account cannot open this page", "Something went wrong on our side") with a button back to the dashboard, never a technical screen. Check it by opening a nonsense address such as /nothing-here, logged in and logged out.
-- [ ] Install without the developer tools: composer install --no-dev --optimize-autoloader. This leaves out the Laravel Boost route (_boost/browser-logs) and the Inertia developer tools.
+- [ ] Install without the developer tools: composer install --no-dev --optimize-autoloader. This leaves out the Laravel Boost route (_boost/browser-logs). The Inertia developer tools page (/_inertia/devtools) only exists while APP_ENV=local, and even then needs a logged-in super admin. With APP_ENV=production, debug is always off, whatever APP_DEBUG says, so check that APP_ENV really is production. Check it by opening /_inertia/devtools/entries: it should say not found.
 - [ ] If the app sits behind a load balancer or a reverse proxy, set TRUSTED_PROXIES to its address(es), comma separated. If you leave it out, the app trusts only this computer, so a visitor cannot fake their address to get around the login lockout.
 - [ ] Do not leave public/hot on the live server (it only exists while 
 pm run dev runs). Run 
