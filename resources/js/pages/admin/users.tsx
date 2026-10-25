@@ -1,8 +1,11 @@
-import { Head, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import {
+    ChevronLeft,
+    ChevronRight,
     History,
     Pencil,
     Plus,
+    Search,
     Trash2,
     UserCheck,
     UserCog,
@@ -27,7 +30,7 @@ import { Input } from '@/components/ui/input';
 import { formatDate } from '@/lib/format';
 import { roleBadgeClasses, roleLabels } from '@/lib/roles';
 import { users as usersRoute } from '@/routes/admin';
-import type { RoleName } from '@/types';
+import type { Paginated, RoleName } from '@/types';
 
 type StaffUser = {
     id: number;
@@ -57,14 +60,32 @@ type HistoryLine = {
     id: number;
     type: string;
     target_name: string;
+    target_email: string;
     summary: string;
     changed_by: string;
     changed_at: string | null;
 };
 
+type HistoryFilters = {
+    q: string;
+    type: string | null;
+    user: number | null;
+    user_name: string | null;
+};
+
+const historyTypeLabels: Record<string, string> = {
+    created: 'Created',
+    updated: 'Edited',
+    deactivated: 'Deactivated',
+    reactivated: 'Reactivated',
+    deleted: 'Deleted',
+};
+
 type Props = {
     users: StaffUser[];
-    history: HistoryLine[];
+    history: Paginated<HistoryLine>;
+    historyFilters: HistoryFilters;
+    historyTypes: string[];
     municipalities: MunicipalityOption[];
     assignableRoles: RoleName[];
 };
@@ -368,6 +389,8 @@ function StaffForm({
 export default function Users({
     users,
     history,
+    historyFilters,
+    historyTypes,
     municipalities,
     assignableRoles,
 }: Props) {
@@ -379,10 +402,50 @@ export default function Users({
     const [editing, setEditing] = useState<StaffUser | null>(null);
     const [deleting, setDeleting] = useState<StaffUser | null>(null);
     const deletion = useForm({});
+    const [historySearch, setHistorySearch] = useState(historyFilters.q);
+    const historyFiltered =
+        historyFilters.q !== '' ||
+        historyFilters.type !== null ||
+        historyFilters.user !== null;
 
     function open(user: StaffUser | null) {
         setEditing(user);
         setFormOpen(true);
+    }
+
+    /** Reloads only the history, keeping the rest of the page and its scroll position. */
+    function applyHistory(
+        next: Partial<{ q: string; type: string | null; user: number | null }>,
+        scrollToHistory = false,
+    ) {
+        const merged = {
+            q: historySearch,
+            type: historyFilters.type,
+            user: historyFilters.user,
+            ...next,
+        };
+
+        router.get(
+            usersRoute().url,
+            {
+                history_q: merged.q.trim() === '' ? undefined : merged.q.trim(),
+                history_type: merged.type ?? undefined,
+                history_user: merged.user ?? undefined,
+            },
+            {
+                preserveScroll: true,
+                preserveState: true,
+                replace: true,
+                only: ['history', 'historyFilters'],
+                onSuccess: () => {
+                    if (scrollToHistory) {
+                        document
+                            .getElementById('account-history')
+                            ?.scrollIntoView({ behavior: 'smooth' });
+                    }
+                },
+            },
+        );
     }
 
     return (
@@ -451,6 +514,23 @@ export default function Users({
                                     </span>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => {
+                                            setHistorySearch('');
+                                            applyHistory(
+                                                {
+                                                    q: '',
+                                                    type: null,
+                                                    user: user.id,
+                                                },
+                                                true,
+                                            );
+                                        }}
+                                    >
+                                        <History />
+                                        History
+                                    </Button>
                                     {user.can_edit && (
                                         <Button
                                             variant="outline"
@@ -508,35 +588,161 @@ export default function Users({
                     </ul>
                 )}
 
-                <section className="grid gap-3" aria-label="Account history">
+                <section
+                    id="account-history"
+                    className="grid scroll-mt-4 gap-4"
+                    aria-label="Account history"
+                >
                     <h2 className="flex items-center gap-2 text-2xl font-bold text-blue-900 dark:text-white">
                         <History className="size-6 text-blue-600" />
-                        Recent account changes
+                        Account changes
                     </h2>
-                    {history.length === 0 ? (
+
+                    <form
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            applyHistory({ q: historySearch });
+                        }}
+                        className="grid gap-3 sm:grid-cols-[1fr_14rem_auto] sm:items-end"
+                    >
+                        <Field id="history-search" label="Search the changes">
+                            <Input
+                                id="history-search"
+                                value={historySearch}
+                                maxLength={100}
+                                placeholder="Name, email or what changed"
+                                onChange={(event) =>
+                                    setHistorySearch(event.target.value)
+                                }
+                            />
+                        </Field>
+                        <Field id="history-type" label="Kind of change">
+                            <ChoiceSelect
+                                id="history-type"
+                                value={historyFilters.type ?? 'all'}
+                                placeholder="All changes"
+                                values={[
+                                    { value: 'all', label: 'All changes' },
+                                    ...historyTypes.map((type) => ({
+                                        value: type,
+                                        label: historyTypeLabels[type] ?? type,
+                                    })),
+                                ]}
+                                onChange={(value) =>
+                                    applyHistory({
+                                        type: value === 'all' ? null : value,
+                                    })
+                                }
+                            />
+                        </Field>
+                        <Button type="submit" className="min-h-12 text-lg">
+                            <Search className="size-5" />
+                            Search
+                        </Button>
+                    </form>
+
+                    {historyFilters.user !== null && (
+                        <p className="flex flex-wrap items-center gap-3 rounded-xl border-2 border-blue-200 bg-blue-50 p-4 text-lg dark:border-border dark:bg-card">
+                            <span>
+                                Showing the changes of{' '}
+                                <strong>
+                                    {historyFilters.user_name ?? 'this account'}
+                                </strong>
+                                .
+                            </span>
+                            <Button
+                                variant="outline"
+                                onClick={() => applyHistory({ user: null })}
+                            >
+                                Show all accounts
+                            </Button>
+                        </p>
+                    )}
+
+                    {history.data.length === 0 ? (
                         <p className="text-lg text-muted-foreground">
-                            Nothing has been changed yet.
+                            {historyFiltered
+                                ? 'No changes match. Try a different word or kind of change.'
+                                : 'Nothing has been changed yet.'}
                         </p>
                     ) : (
-                        <ul className="grid gap-2">
-                            {history.map((line) => (
-                                <li
-                                    key={line.id}
-                                    className="rounded-xl border-2 border-slate-200 p-4 dark:border-border"
-                                >
-                                    <p className="text-lg font-semibold">
-                                        {line.target_name}
-                                    </p>
-                                    <p className="text-lg">{line.summary}</p>
-                                    <p className="text-base text-muted-foreground">
-                                        {line.changed_by}
-                                        {line.changed_at
-                                            ? ` · ${formatDate(line.changed_at)}`
-                                            : ''}
-                                    </p>
-                                </li>
-                            ))}
-                        </ul>
+                        <>
+                            <p className="text-base text-muted-foreground">
+                                {history.total}{' '}
+                                {history.total === 1 ? 'change' : 'changes'},
+                                newest first.
+                            </p>
+                            <ul className="grid gap-2">
+                                {history.data.map((line) => (
+                                    <li
+                                        key={line.id}
+                                        className="rounded-xl border-2 border-slate-200 p-4 dark:border-border"
+                                    >
+                                        <p className="flex flex-wrap items-center gap-2 text-lg font-semibold">
+                                            {line.target_name}
+                                            <span className="rounded-md bg-slate-200 px-2 py-0.5 text-base font-semibold text-slate-900 dark:bg-muted dark:text-foreground">
+                                                {historyTypeLabels[line.type] ??
+                                                    line.type}
+                                            </span>
+                                        </p>
+                                        <p className="text-base text-muted-foreground">
+                                            {line.target_email}
+                                        </p>
+                                        <p className="text-lg">
+                                            {line.summary}
+                                        </p>
+                                        <p className="text-base text-muted-foreground">
+                                            {line.changed_by}
+                                            {line.changed_at
+                                                ? ` · ${formatDate(line.changed_at)}`
+                                                : ''}
+                                        </p>
+                                    </li>
+                                ))}
+                            </ul>
+                        </>
+                    )}
+
+                    {history.last_page > 1 && (
+                        <nav
+                            className="flex items-center justify-between gap-3"
+                            aria-label="Account changes pages"
+                        >
+                            {history.prev_page_url ? (
+                                <Button asChild variant="outline">
+                                    <Link
+                                        href={history.prev_page_url}
+                                        preserveScroll
+                                        preserveState
+                                        only={['history', 'historyFilters']}
+                                    >
+                                        <ChevronLeft />
+                                        Newer
+                                    </Link>
+                                </Button>
+                            ) : (
+                                <span />
+                            )}
+                            <span className="text-base font-medium">
+                                Page {history.current_page} of{' '}
+                                {history.last_page}
+                            </span>
+                            {history.next_page_url ? (
+                                <Button asChild variant="outline">
+                                    <Link
+                                        href={history.next_page_url}
+                                        preserveScroll
+                                        preserveState
+                                        only={['history', 'historyFilters']}
+                                    >
+                                        Older
+                                        <ChevronRight />
+                                    </Link>
+                                </Button>
+                            ) : (
+                                <span />
+                            )}
+                        </nav>
                     )}
                 </section>
             </div>

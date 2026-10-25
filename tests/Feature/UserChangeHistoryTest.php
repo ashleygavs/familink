@@ -117,16 +117,92 @@ it('shows an admin only the changes of the encoders they handle, and a super adm
     UserChange::factory()->create(['barangay_id' => null, 'summary' => 'Staff change.', 'changed_by_user_id' => $this->super->id]);
 
     $this->actingAs($this->admin)->get(route('admin.users'))
-        ->assertInertia(fn ($page) => $page->has('history', 1)->where('history.0.summary', 'Visible change.'));
+        ->assertInertia(fn ($page) => $page->has('history.data', 1)->where('history.data.0.summary', 'Visible change.'));
 
     $this->actingAs($this->super)->get(route('admin.users'))
-        ->assertInertia(fn ($page) => $page->has('history', 3));
+        ->assertInertia(fn ($page) => $page->has('history.data', 3));
 });
 
-it('lists the newest changes first and no more than thirty', function () {
-    UserChange::factory()->count(35)->create(['barangay_id' => $this->sanJose->id, 'changed_by_user_id' => $this->super->id]);
+it('lists the newest changes first, fifteen to a page, so older ones can still be reached', function () {
+    UserChange::factory()->count(20)->create(['barangay_id' => $this->sanJose->id, 'changed_by_user_id' => $this->super->id]);
+    $oldest = UserChange::query()->orderBy('id')->first();
     $newest = UserChange::factory()->create(['barangay_id' => $this->sanJose->id, 'summary' => 'Newest.', 'changed_by_user_id' => $this->super->id]);
 
     $this->actingAs($this->admin)->get(route('admin.users'))
-        ->assertInertia(fn ($page) => $page->has('history', 30)->where('history.0.id', $newest->id));
+        ->assertInertia(fn ($page) => $page
+            ->has('history.data', 15)
+            ->where('history.data.0.id', $newest->id)
+            ->where('history.total', 21)
+            ->where('history.last_page', 2));
+
+    $this->actingAs($this->admin)->get(route('admin.users', ['history_page' => 2]))
+        ->assertInertia(fn ($page) => $page
+            ->has('history.data', 6)
+            ->where('history.data.5.id', $oldest->id));
+});
+
+it('narrows the history to one kind of change', function () {
+    UserChange::factory()->create(['barangay_id' => $this->sanJose->id, 'type' => UserChange::CREATED, 'changed_by_user_id' => $this->super->id]);
+    UserChange::factory()->count(2)->create(['barangay_id' => $this->sanJose->id, 'type' => UserChange::DEACTIVATED, 'changed_by_user_id' => $this->super->id]);
+
+    $this->actingAs($this->admin)->get(route('admin.users', ['history_type' => 'deactivated']))
+        ->assertInertia(fn ($page) => $page->has('history.data', 2)->where('historyFilters.type', 'deactivated'));
+
+    $this->actingAs($this->admin)->get(route('admin.users', ['history_type' => 'not-a-type']))->assertSessionHasErrors('history_type');
+});
+
+it('shows the history of one account only, with its name', function () {
+    $mine = ($this->encoder)(['name' => 'BAC_San Jose Encoder']);
+    $other = ($this->encoder)(['name' => 'Someone Else']);
+    UserChange::factory()->count(2)->create(['user_id' => $mine->id, 'barangay_id' => $this->sanJose->id, 'changed_by_user_id' => $this->super->id]);
+    UserChange::factory()->create(['user_id' => $other->id, 'barangay_id' => $this->sanJose->id, 'changed_by_user_id' => $this->super->id]);
+
+    $this->actingAs($this->admin)->get(route('admin.users', ['history_user' => $mine->id]))
+        ->assertInertia(fn ($page) => $page
+            ->has('history.data', 2)
+            ->where('historyFilters.user', $mine->id)
+            ->where('historyFilters.user_name', 'BAC_San Jose Encoder'));
+});
+
+it('does not reveal an account outside the admin\'s barangays through the account filter', function () {
+    $far = ($this->encoder)(['barangay_id' => $this->cabalantian->id, 'name' => 'Far Away Encoder']);
+    UserChange::factory()->create(['user_id' => $far->id, 'barangay_id' => $this->cabalantian->id, 'changed_by_user_id' => $this->super->id]);
+
+    $this->actingAs($this->admin)->get(route('admin.users', ['history_user' => $far->id]))
+        ->assertInertia(fn ($page) => $page->has('history.data', 0)->where('historyFilters.user_name', null));
+});
+
+it('searches the history by account, email, summary or who made the change', function () {
+    $make = fn (array $extra) => UserChange::factory()->create(['barangay_id' => $this->sanJose->id, 'changed_by_user_id' => $this->super->id, ...$extra]);
+    $make(['target_name' => 'Zelda Encoder', 'target_email' => 'zelda@example.com', 'summary' => 'Created the account.']);
+    $make(['target_name' => 'Other Person', 'target_email' => 'other@example.com', 'summary' => 'Changed Barangay from Alpha to Omega.']);
+    $make(['target_name' => 'Third Person', 'target_email' => 'third@example.com', 'summary' => 'Deactivated.', 'changed_by_user_id' => $this->admin->id]);
+
+    $count = fn (string $term) => $this->actingAs($this->admin)->get(route('admin.users', ['history_q' => $term]))->viewData('page')['props']['history']['total'];
+
+    expect($count('Zelda'))->toBe(1)
+        ->and($count('third@example'))->toBe(1)
+        ->and($count('Omega'))->toBe(1)
+        ->and($count('Local Admin'))->toBe(1)
+        ->and($count('nothing matches this'))->toBe(0);
+});
+
+it('treats percent and underscore in a search as plain characters', function () {
+    UserChange::factory()->create(['barangay_id' => $this->sanJose->id, 'summary' => 'Changed role.', 'changed_by_user_id' => $this->super->id]);
+
+    $response = $this->actingAs($this->admin)->get(route('admin.users', ['history_q' => '%']));
+
+    expect($response->viewData('page')['props']['history']['total'])->toBe(0);
+});
+
+it('keeps the filters in the links to the next pages', function () {
+    UserChange::factory()->count(20)->create(['barangay_id' => $this->sanJose->id, 'type' => UserChange::UPDATED, 'changed_by_user_id' => $this->super->id]);
+
+    $this->actingAs($this->admin)->get(route('admin.users', ['history_type' => 'updated', 'history_q' => 'Changed']))
+        ->assertInertia(fn ($page) => $page->where('history.next_page_url', fn (string $url) => str_contains($url, 'history_type=updated') && str_contains($url, 'history_q=Changed') && str_contains($url, 'history_page=2')));
+});
+
+it('offers every kind of change as a filter', function () {
+    $this->actingAs($this->admin)->get(route('admin.users'))
+        ->assertInertia(fn ($page) => $page->where('historyTypes', UserChange::TYPES));
 });

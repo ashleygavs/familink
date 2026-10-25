@@ -42,6 +42,13 @@ class UserChange extends Model
     public const DELETED = 'deleted';
 
     /**
+     * Every kind of change, for filtering the history.
+     *
+     * @var list<string>
+     */
+    public const TYPES = [self::CREATED, self::UPDATED, self::DEACTIVATED, self::REACTIVATED, self::DELETED];
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array

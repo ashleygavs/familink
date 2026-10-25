@@ -186,7 +186,9 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 - [ ] **Add account**: another encoder for San Jose. Role choices offered: Encoder only, and only San Jose as the barangay.
 - [ ] Try to give that new account a barangay in Cabalantian or Lubao. Expected: not offered or refused.
 - [ ] **Deactivate** an encoder, confirm. Expected: "Inactive" label. In the encoder's browser, the next click logs them out, and logging in again says the account is deactivated.
-- [ ] At the bottom of **Users**, **Recent account changes** lists each change with who made it and when. After the steps above you see the creation, the deactivation and the reactivation. Changing an encoder's barangay shows 'Barangay from X to Y'. Setting a password only says 'A new password was set', never the password itself.
+- [ ] At the bottom of **Users**, **Account changes** lists each change with the kind of change, who made it and when. After the steps above you see the creation, the deactivation and the reactivation. Changing an encoder's barangay shows 'Barangay from X to Y'. Setting a password only says 'A new password was set', never the password itself.
+- [ ] The list shows 15 changes at a time, newest first. **Older** and **Newer** move between pages and stay on the history. Type a name, an email or a word such as "Barangay" in **Search the changes**, or pick a **Kind of change**: the list narrows and goes back to page 1.
+- [ ] Press **History** on an account's card: the list jumps to that account's changes only, with a "Showing the changes of..." notice. **Show all accounts** brings everything back. An admin never sees changes of encoders outside their barangays.
 - [ ] An account that has made changes cannot be deleted, only deactivated, so the history keeps its author.
 - [ ] **Reactivate** them. Expected: they can log in again.
 - [ ] You cannot see or edit admins or super admins here.

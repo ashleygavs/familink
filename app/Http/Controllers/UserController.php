@@ -12,12 +12,17 @@ use App\Models\User;
 use App\Models\UserChange;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
+/**
+ * @phpstan-type HistoryLine array{id: int, type: string, target_name: string, target_email: string, summary: string, changed_by: string, changed_at: string|null}
+ */
 class UserController extends Controller
 {
     /**
@@ -29,6 +34,12 @@ class UserController extends Controller
 
         $actor = $request->user();
         $barangayIds = $actor->accessibleBarangayIds();
+
+        $filters = $request->validate([
+            'history_q' => ['nullable', 'string', 'max:100'],
+            'history_type' => ['nullable', Rule::in(UserChange::TYPES)],
+            'history_user' => ['nullable', 'integer'],
+        ]);
 
         $users = User::query()
             ->with(['role', 'barangay', 'municipality', 'managedBarangays:id,name'])
@@ -70,22 +81,55 @@ class UserController extends Controller
                     'barangays' => $municipality->barangays->map(fn (Barangay $barangay): array => ['id' => $barangay->id, 'name' => $barangay->name])->all(),
                 ])->values(),
             'assignableRoles' => $actor->hasRole(RoleName::SuperAdmin) ? RoleName::values() : [RoleName::User->value],
-            'history' => UserChange::query()
-                ->with('changedBy')
-                ->when($barangayIds !== null, fn ($query) => $query->whereIn('barangay_id', $barangayIds))
-                ->latest('id')
-                ->limit(30)
-                ->get()
-                ->map(fn (UserChange $change): array => [
-                    'id' => $change->id,
-                    'type' => $change->type,
-                    'target_name' => $change->target_name,
-                    'summary' => $change->summary,
-                    'changed_by' => $change->changedBy->name,
-                    'changed_at' => $change->created_at?->toIso8601String(),
-                ])
-                ->values(),
+            'history' => $this->history($barangayIds, $filters),
+            'historyFilters' => [
+                'q' => $filters['history_q'] ?? '',
+                'type' => $filters['history_type'] ?? null,
+                'user' => isset($filters['history_user']) ? (int) $filters['history_user'] : null,
+                'user_name' => isset($filters['history_user'])
+                    ? User::query()->whereKey($filters['history_user'])->when($barangayIds !== null, fn ($query) => $query->whereIn('barangay_id', $barangayIds))->value('name')
+                    : null,
+            ],
+            'historyTypes' => UserChange::TYPES,
         ]);
+    }
+
+    /**
+     * The changes made to staff accounts, newest first, a page at a time. They can be narrowed to one kind of change,
+     * to one account, or to a word in the account, the summary or the name of whoever made the change. An admin only
+     * ever sees the changes of the encoders they handle.
+     *
+     * @param  list<int>|null  $barangayIds
+     * @param  array<string, mixed>  $filters
+     * @return LengthAwarePaginator<int, HistoryLine>
+     */
+    private function history(?array $barangayIds, array $filters): LengthAwarePaginator
+    {
+        $term = trim((string) ($filters['history_q'] ?? ''));
+        $like = '%'.addcslashes($term, '%_\\').'%';
+
+        return UserChange::query()
+            ->with('changedBy')
+            ->when($barangayIds !== null, fn ($query) => $query->whereIn('barangay_id', $barangayIds))
+            ->when($filters['history_type'] ?? null, fn ($query, string $type) => $query->where('type', $type))
+            ->when($filters['history_user'] ?? null, fn ($query, int|string $id) => $query->where('user_id', (int) $id))
+            ->when($term !== '', fn ($query) => $query->where(fn ($match) => $match
+                ->where('target_name', 'like', $like)
+                ->orWhere('target_email', 'like', $like)
+                ->orWhere('summary', 'like', $like)
+                ->orWhereHas('changedBy', fn ($by) => $by->where('name', 'like', $like))))
+            ->latest('id')
+            ->paginate(15, pageName: 'history_page')
+            ->withQueryString()
+            ->through(fn (UserChange $change): array => [
+                'id' => $change->id,
+                'type' => $change->type,
+                'target_name' => $change->target_name,
+                'target_email' => $change->target_email,
+                'summary' => $change->summary,
+                'changed_by' => $change->changedBy->name,
+                'changed_at' => $change->created_at?->toIso8601String(),
+            ]);
     }
 
     public function store(SaveUserRequest $request, RecordUserChange $record): RedirectResponse
