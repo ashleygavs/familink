@@ -60,14 +60,25 @@ class RecordSuggestionFeedback
      */
     public function rejectedFor(Resident $resident): array
     {
+        return $this->rejectedForMany([$resident->id])[$resident->id] ?? [];
+    }
+
+    /**
+     * What has already been answered for each of several residents, asked in one go.
+     *
+     * @param  iterable<int>  $residentIds
+     * @return array<int, array<string, list<int>>>
+     */
+    public function rejectedForMany(iterable $residentIds): array
+    {
         $rejected = [];
 
         SuggestionFeedback::query()
-            ->where('resident_id', $resident->id)
+            ->whereIn('resident_id', collect($residentIds)->all())
             ->whereIn('decision', ['rejected', 'reclassified'])
-            ->get(['role', 'candidate_id'])
+            ->get(['resident_id', 'role', 'candidate_id'])
             ->each(function (SuggestionFeedback $feedback) use (&$rejected): void {
-                $rejected[$feedback->role][] = $feedback->candidate_id;
+                $rejected[$feedback->resident_id][$feedback->role][] = $feedback->candidate_id;
             });
 
         return $rejected;

@@ -41,13 +41,18 @@ class UserController extends Controller
             'history_user' => ['nullable', 'integer'],
         ]);
 
-        $users = User::query()
+        $accounts = User::query()
             ->with(['role', 'barangay', 'municipality', 'managedBarangays:id,name'])
             ->when($barangayIds !== null, fn ($query) => $query
                 ->whereHas('role', fn ($role) => $role->where('name', RoleName::User->value))
                 ->whereIn('barangay_id', $barangayIds))
             ->orderBy('name')
-            ->get()
+            ->get();
+
+        // Which accounts have history is worked out once for the whole list, not account by account.
+        $withHistory = User::idsWithHistory($accounts->modelKeys());
+
+        $users = $accounts
             ->map(fn (User $user): array => [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -62,7 +67,7 @@ class UserController extends Controller
                 'active' => $user->isActive(),
                 'can_edit' => $actor->can('update', $user),
                 'can_toggle' => $actor->can('deactivate', $user) || (! $user->isActive() && $actor->can('reactivate', $user)),
-                'can_delete' => $actor->can('delete', $user) && ! $user->hasHistory(),
+                'can_delete' => $actor->can('delete', $user) && ! $withHistory->contains($user->id),
             ]);
 
         return Inertia::render('admin/users', [

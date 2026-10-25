@@ -20,6 +20,7 @@ use App\Models\Resident;
 use App\Models\ResidentChange;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -45,6 +46,10 @@ class ApprovalController extends Controller
             ->get()
             ->keyBy('resident_id');
 
+        // Both are asked once for everyone on the page, not once per person.
+        $declared = $this->declaredRelativesFor($page->pluck('id'));
+        $answered = $feedback->rejectedForMany($page->pluck('id'));
+
         $pending = $page
             ->through(fn (Resident $resident) => [
                 'id' => $resident->id,
@@ -65,8 +70,8 @@ class ApprovalController extends Controller
                     ->values()->all(),
                 'registered_at' => $resident->created_at?->toIso8601String(),
                 'registered_by' => $registeredBy->get($resident->id)?->changedBy->name,
-                'declared_relatives' => $this->declaredRelatives($resident),
-                'suggestions' => $this->suggestionsFor($findFamilyMatches, $feedback, $resident, $request->user()->accessibleBarangayIds()),
+                'declared_relatives' => $declared[$resident->id] ?? [],
+                'suggestions' => $this->suggestionsFor($findFamilyMatches, $answered[$resident->id] ?? [], $resident, $request->user()->accessibleBarangayIds()),
             ]);
 
         return Inertia::render('admin/approvals', ['pending' => $pending]);
@@ -136,43 +141,52 @@ class ApprovalController extends Controller
     }
 
     /**
-     * The relatives the resident named when registering, plus those who named the resident.
+     * The relatives each of these residents listed, or was listed by, keyed by resident.
      *
-     * @return array<int, array{id: int, relation: string, name: string, system_id_no: string}>
+     * @param  Collection<int, int>  $residentIds
+     * @return array<int, array<int, array{id: int, relation: string, name: string, system_id_no: string}>>
      */
-    private function declaredRelatives(Resident $resident): array
+    private function declaredRelativesFor(Collection $residentIds): array
     {
-        return RelativeLink::query()
+        $links = RelativeLink::query()
             ->with(['resident', 'relative'])
-            ->where('resident_id', $resident->id)
-            ->orWhere('relative_id', $resident->id)
-            ->get()
-            ->map(function (RelativeLink $link) use ($resident): array {
-                $named = $link->resident_id === $resident->id;
-                $other = $named ? $link->relative : $link->resident;
+            ->whereIn('resident_id', $residentIds->all())
+            ->orWhereIn('relative_id', $residentIds->all())
+            ->get();
 
-                return [
-                    'id' => $link->id,
-                    'relation' => ($named ? $link->relation : $link->relation->inverse())->label(),
-                    'name' => $other->full_name,
-                    'system_id_no' => $other->system_id_no,
-                ];
-            })
-            ->values()
-            ->all();
+        $declared = [];
+
+        foreach ($residentIds as $residentId) {
+            $declared[$residentId] = $links
+                ->filter(fn (RelativeLink $link): bool => $link->resident_id === $residentId || $link->relative_id === $residentId)
+                ->map(function (RelativeLink $link) use ($residentId): array {
+                    $named = $link->resident_id === $residentId;
+                    $other = $named ? $link->relative : $link->resident;
+
+                    return [
+                        'id' => $link->id,
+                        'relation' => ($named ? $link->relation : $link->relation->inverse())->label(),
+                        'name' => $other->full_name,
+                        'system_id_no' => $other->system_id_no,
+                    ];
+                })
+                ->values()
+                ->all();
+        }
+
+        return $declared;
     }
 
     /**
      * Suggestions for the family slots that are still empty. Only people in the barangays the admin handles
      * are suggested, so an admin never sees residents outside their area.
      *
+     * @param  array<string, list<int>>  $answered  The suggestions already turned down for this resident, by role.
      * @param  list<int>|null  $scope  The admin's barangays; null for a super admin, who sees everyone.
      * @return array<string, mixed>
      */
-    private function suggestionsFor(FindFamilyMatches $findFamilyMatches, RecordSuggestionFeedback $feedback, Resident $resident, ?array $scope): array
+    private function suggestionsFor(FindFamilyMatches $findFamilyMatches, array $answered, Resident $resident, ?array $scope): array
     {
-        $answered = $feedback->rejectedFor($resident);
-
         $matches = $findFamilyMatches->handle([
             'first_name' => $resident->first_name,
             'middle_name' => $resident->middle_name,

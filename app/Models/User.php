@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Laravel\Fortify\Contracts\PasskeyUser;
 use Laravel\Fortify\PasskeyAuthenticatable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -85,6 +86,14 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
      */
     public function accessibleBarangayIds(): ?array
     {
+        return once(fn (): ?array => $this->resolveAccessibleBarangayIds());
+    }
+
+    /**
+     * @return list<int>|null
+     */
+    private function resolveAccessibleBarangayIds(): ?array
+    {
         if ($this->hasRole(RoleName::SuperAdmin, RoleName::Stakeholder)) {
             return null;
         }
@@ -150,13 +159,33 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
      */
     public function hasHistory(): bool
     {
-        return Resident::query()->where('approved_by_user_id', $this->id)->exists()
-            || ReliefLog::query()->where('scanned_by_user_id', $this->id)->exists()
-            || ReliefEvent::query()->where('created_by_user_id', $this->id)->exists()
-            || SuggestionFeedback::query()->where('decided_by_user_id', $this->id)->exists()
-            || ResidentChange::query()->where('changed_by_user_id', $this->id)->exists()
-            || ReliefEventChange::query()->where('changed_by_user_id', $this->id)->exists()
-            || UserChange::query()->where('changed_by_user_id', $this->id)->exists();
+        return self::idsWithHistory([$this->id])->contains($this->id);
+    }
+
+    /**
+     * Of these accounts, the ones that have history. It asks each table once for all of them, so a list of staff
+     * costs the same few questions however long it is.
+     *
+     * @param  iterable<int>  $ids
+     * @return Collection<int, int>
+     */
+    public static function idsWithHistory(iterable $ids): Collection
+    {
+        $ids = collect($ids)->unique()->values();
+
+        return collect([
+            [Resident::class, 'approved_by_user_id'],
+            [ReliefLog::class, 'scanned_by_user_id'],
+            [ReliefEvent::class, 'created_by_user_id'],
+            [SuggestionFeedback::class, 'decided_by_user_id'],
+            [ResidentChange::class, 'changed_by_user_id'],
+            [ReliefEventChange::class, 'changed_by_user_id'],
+            [UserChange::class, 'changed_by_user_id'],
+        ])
+            ->flatMap(fn (array $source): array => $source[0]::query()->whereIn($source[1], $ids)->distinct()->pluck($source[1])->all())
+            ->map(fn ($id): int => (int) $id)
+            ->unique()
+            ->values();
     }
 
     public function hasRole(RoleName|string ...$roles): bool
