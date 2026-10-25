@@ -341,6 +341,8 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 Do these once, on the computer or host that people will really use. None of them are needed for testing on this PC.
 
 - [ ] In the live .env: APP_ENV=production, APP_DEBUG=false, LOG_LEVEL=error, and APP_URL set to the https:// address. With APP_ENV=production the app already forces secure cookies, encrypted sessions and hides debug pages.
+- [ ] Keep errors on file without the log growing forever: in the live .env set LOG_STACK=daily (one file per day, the last 14 days are kept by default, or add LOG_DAILY_DAYS=30). Ask someone to read `storage/logs` once a week and tell you about anything marked ERROR. Errors are written there whether or not anyone is watching. Emailing errors can be added later, once real mail works.
+- [ ] On the live site, a mistyped address, a page your role cannot open, or a fault shows a friendly page ("We could not find that page", "Your account cannot open this page", "Something went wrong on our side") with a button back to the dashboard, never a technical screen. Check it by opening a nonsense address such as /nothing-here, logged in and logged out.
 - [ ] Install without the developer tools: composer install --no-dev --optimize-autoloader. This leaves out the Laravel Boost route (_boost/browser-logs) and the Inertia developer tools.
 - [ ] If the app sits behind a load balancer or a reverse proxy, set TRUSTED_PROXIES to its address(es), comma separated. If you leave it out, the app trusts only this computer, so a visitor cannot fake their address to get around the login lockout.
 - [ ] Do not leave public/hot on the live server (it only exists while 

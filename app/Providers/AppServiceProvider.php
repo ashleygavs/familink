@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Inertia\ExceptionResponse;
+use Inertia\Inertia;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -28,6 +30,30 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configureRateLimiting();
+        $this->configureErrorPages();
+    }
+
+    /**
+     * Show the friendly error page for the errors people can meet. A real fault (500) keeps Laravel's detailed screen
+     * while developing, and scanner or search requests that expect JSON still get a plain JSON answer.
+     */
+    protected function configureErrorPages(): void
+    {
+        Inertia::handleExceptionsUsing(function (ExceptionResponse $response) {
+            $request = $response->request;
+
+            if ($request->expectsJson() && ! $request->header('X-Inertia')) {
+                return null;
+            }
+
+            $status = $response->statusCode();
+
+            if (! in_array($status, [403, 404, 419, 429, 500, 503], true) || ($status === 500 && config('app.debug'))) {
+                return null;
+            }
+
+            return $response->render('error', ['status' => $status])->withSharedData();
+        });
     }
 
     /**

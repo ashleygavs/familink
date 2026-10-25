@@ -105,3 +105,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__.'/settings.php';
+
+// An address that matches nothing still goes through the web group, so the error page knows who is logged in.
+Route::fallback(fn () => abort(404));

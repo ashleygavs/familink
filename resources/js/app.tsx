@@ -13,6 +13,8 @@ void createInertiaApp({
     layout: (name) => {
         switch (true) {
             case name === 'welcome':
+            // The error page picks its own layout, because a person who is not logged in has no menu.
+            case name === 'error':
             // A plain sheet for printing QR cards, without the menu.
             case name === 'residents/qr-cards':
                 return null;
