@@ -490,7 +490,7 @@ export default function Users({
                                 key={user.id}
                                 className="flex flex-wrap items-center gap-3 rounded-xl border-2 border-blue-200 bg-card p-4 dark:border-sidebar-border"
                             >
-                                <div className="grid min-w-0 flex-1 gap-1">
+                                <div className="grid min-w-0 flex-1 basis-80 gap-1 [overflow-wrap:anywhere]">
                                     <span className="flex flex-wrap items-center gap-2 text-xl font-bold">
                                         {user.name}
                                         {user.role && (

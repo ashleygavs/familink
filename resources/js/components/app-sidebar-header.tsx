@@ -26,7 +26,7 @@ export function AppSidebarHeader({
     return (
         <header className="sticky top-0 z-20 flex min-h-16 shrink-0 items-center justify-between gap-3 border-b-2 border-blue-200 bg-white/95 px-4 backdrop-blur dark:border-sidebar-border dark:bg-background/95 print:hidden">
             <div className="flex min-w-0 items-center gap-2">
-                <SidebarTrigger className="-ml-1 size-10" />
+                <SidebarTrigger className="-ml-1 size-12" />
                 <div className="flex items-center gap-2 md:hidden">
                     <span className="flex size-9 items-center justify-center rounded-lg bg-blue-600 text-white">
                         <ShieldCheck className="size-5" />

@@ -140,6 +140,44 @@
     body {
         @apply bg-background text-foreground;
     }
+
+    /*
+     * Anything that can be clicked shows the pointer hand, so it is clear to people who are new to computers what
+     * is a button. Disabled controls keep the "not allowed" cursor. Classes written on an element, such as
+     * cursor-default or the graph's own cursors, still win over these rules.
+     */
+    button,
+    summary,
+    select,
+    a[href],
+    label:has(input[type='checkbox']),
+    label:has(input[type='radio']),
+    label:has([role='checkbox']),
+    label:has([role='radio']),
+    label:has(~ [role='combobox']),
+    [role='checkbox'] ~ label,
+    [role='radio'] ~ label,
+    [role='switch'] ~ label,
+    [role='button'],
+    [role='checkbox'],
+    [role='combobox'],
+    [role='menuitem'],
+    [role='option'],
+    [role='radio'],
+    [role='switch'],
+    [role='tab'],
+    input[type='checkbox'],
+    input[type='radio'],
+    input[type='submit'],
+    input[type='button'] {
+        cursor: pointer;
+    }
+
+    :disabled,
+    [aria-disabled='true'],
+    [data-disabled] {
+        cursor: not-allowed;
+    }
 }
 
 @media print {

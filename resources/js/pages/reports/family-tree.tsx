@@ -783,6 +783,18 @@ export default function FamilyTree({ household, tree }: Props) {
             setSelectedId(typeof id === 'number' ? id : null);
         });
         instance.on('deselectNode', () => setSelectedId(null));
+
+        // The drawing is not made of buttons, so the hand over a person has to be set by hand. The dots where
+        // couples join are not clickable, only the people.
+        const frame = container.current;
+
+        instance.on('hoverNode', (event: { node: number | string }) => {
+            frame.style.cursor =
+                typeof event.node === 'number' ? 'pointer' : '';
+        });
+        instance.on('blurNode', () => {
+            frame.style.cursor = '';
+        });
         network.current = instance;
 
         return () => {
@@ -1101,14 +1113,17 @@ export default function FamilyTree({ household, tree }: Props) {
                             </h2>
                             <ul className="grid gap-1 text-base sm:grid-cols-2">
                                 {members.map((member) => (
-                                    <li key={member.id}>
+                                    <li
+                                        key={member.id}
+                                        className="flex flex-wrap items-center gap-x-2"
+                                    >
                                         <button
                                             type="button"
-                                            className="text-left underline-offset-2 hover:underline"
+                                            className="min-h-12 text-left font-semibold text-blue-700 underline underline-offset-2 dark:text-sky-300"
                                             onClick={() => choose(member.id)}
                                         >
                                             {member.name}
-                                        </button>{' '}
+                                        </button>
                                         <span className="text-muted-foreground">
                                             ({member.gender},{' '}
                                             {member.birth_year})
