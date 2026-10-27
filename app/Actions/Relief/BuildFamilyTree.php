@@ -34,7 +34,7 @@ class BuildFamilyTree
     private const MAX_NODES_WIDE = 250;
 
     /**
-     * @return array{nodes: list<TreeNode>, edges: list<TreeEdge>, truncated: bool, truncated_relatives: bool, reference: array{id: int, name: string}|null, reach: string}
+     * @return array{nodes: list<TreeNode>, edges: list<TreeEdge>, truncated: bool, truncated_relatives: bool, reference: array{id: int, name: string}|null, reach: string, added: int}
      */
     public function handle(Household $household, string $reach = 'close'): array
     {
@@ -50,6 +50,8 @@ class BuildFamilyTree
             ->all());
 
         $ids = array_fill_keys($memberIds, true);
+        // How many steps from the household each person was found, so a level can say how many people it added.
+        $stepsAway = array_fill_keys($memberIds, 0);
         $frontier = $memberIds;
         $truncated = false;
         $truncatedRelatives = false;
@@ -74,6 +76,7 @@ class BuildFamilyTree
                     }
 
                     $ids[$id] = true;
+                    $stepsAway[$id] = $depth + 1;
 
                     if ($expands) {
                         $frontier[] = $id;
@@ -114,7 +117,26 @@ class BuildFamilyTree
             'truncated_relatives' => $truncatedRelatives,
             'reference' => $reference === null ? null : ['id' => $reference->id, 'name' => $reference->full_name],
             'reach' => $reach,
+            'added' => $this->addedBy($reach, $residents->keys()->all(), $stepsAway),
         ];
+    }
+
+    /**
+     * How many of the people shown were reached only because of this level, and not by the level before it. The close
+     * family is the first level, so it adds nobody by this count.
+     *
+     * @param  array<int, int|string>  $shown
+     * @param  array<int, int>  $stepsAway
+     */
+    private function addedBy(string $reach, array $shown, array $stepsAway): int
+    {
+        $previous = ['cousins' => self::REACHES['close'], 'wide' => self::REACHES['cousins']][$reach] ?? null;
+
+        if ($previous === null) {
+            return 0;
+        }
+
+        return count(array_filter($shown, fn (int|string $id): bool => ($stepsAway[(int) $id] ?? 0) > $previous));
     }
 
     /**

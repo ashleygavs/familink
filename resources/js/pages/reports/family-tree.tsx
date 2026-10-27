@@ -62,6 +62,8 @@ type Props = {
         /** The person the relationship labels are given from, usually the head of the household. */
         reference: { id: number; name: string } | null;
         reach: Reach;
+        /** How many of the people shown were reached only by this level and not by the one before it. */
+        added: number;
     };
 };
 
@@ -577,6 +579,31 @@ function RelativesList({
     );
 }
 
+/**
+ * What the chosen reach shows, in plain words. The levels count steps outward from everyone who lives in the household,
+ * not "cousins" as such, so a level that reaches nobody new says so instead of promising cousins.
+ */
+function reachNote(reach: Reach, added: number): string {
+    if (reach === 'close') {
+        return 'Parents, grandparents, brothers and sisters, aunts and uncles, and children.';
+    }
+
+    const counted =
+        'The distance is counted outward from everyone who lives in this household.';
+
+    if (added === 0) {
+        return `Nobody more is related at this distance, so this shows the same people as the shorter reach. ${counted}`;
+    }
+
+    const people = added === 1 ? 'person' : 'people';
+    const such =
+        reach === 'cousins'
+            ? 'such as first cousins'
+            : 'such as second cousins and cousins once removed';
+
+    return `Adds ${added} more ${people}, ${such}. ${counted} Beyond close family only blood relatives are followed.`;
+}
+
 export default function FamilyTree({ household, tree }: Props) {
     const container = useRef<HTMLDivElement>(null);
     const network = useRef<Network | null>(null);
@@ -932,11 +959,7 @@ export default function FamilyTree({ household, tree }: Props) {
                             </div>
                             <p className="text-base text-muted-foreground">
                                 {tree.nodes.length} people.{' '}
-                                {tree.reach === 'close'
-                                    ? 'Parents, grandparents, brothers and sisters, aunts and uncles, and children.'
-                                    : tree.reach === 'cousins'
-                                      ? 'Adds first cousins. Beyond close family only blood relatives are followed.'
-                                      : 'Adds second cousins, who share great-grandparents. Beyond close family only blood relatives are followed.'}
+                                {reachNote(tree.reach, tree.added)}
                                 {tree.reference &&
                                     ` Each person is labelled by how they are related to ${tree.reference.name}.`}
                             </p>

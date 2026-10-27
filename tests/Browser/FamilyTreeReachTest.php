@@ -19,7 +19,7 @@ beforeEach(function () {
     ]);
 
     $this->anaHome = $home();
-    $oldHome = $home();
+    $this->oldHome = $home();
     $andoHome = $home();
 
     $ramon = $make($andoHome, 'Ramon', 'Male', 1915);
@@ -27,15 +27,15 @@ beforeEach(function () {
     $tess = $make($andoHome, 'Tess', 'Female', 1962, ['father_id' => $ando->id]);
     $make($andoHome, 'Uno', 'Male', 1988, ['mother_id' => $tess->id]);
 
-    $lolo = $make($oldHome, 'Lolo Ben', 'Male', 1940, ['father_id' => $ramon->id]);
-    $lola = $make($oldHome, 'Lola Rosa', 'Female', 1942, ['spouse_id' => $lolo->id]);
+    $lolo = $make($this->oldHome, 'Lolo Ben', 'Male', 1940, ['father_id' => $ramon->id]);
+    $lola = $make($this->oldHome, 'Lola Rosa', 'Female', 1942, ['spouse_id' => $lolo->id]);
     $lolo->update(['spouse_id' => $lola->id]);
-    $pedro = $make($oldHome, 'Pedro', 'Male', 1965, ['father_id' => $lolo->id, 'mother_id' => $lola->id]);
-    $maria = $make($oldHome, 'Maria', 'Female', 1968, ['father_id' => $lolo->id, 'mother_id' => $lola->id]);
-    $ben = $make($oldHome, 'Ben', 'Male', 1993, ['mother_id' => $maria->id]);
-    $elena = $make($oldHome, 'Elena', 'Female', 1994, ['spouse_id' => $ben->id]);
+    $pedro = $make($this->oldHome, 'Pedro', 'Male', 1965, ['father_id' => $lolo->id, 'mother_id' => $lola->id]);
+    $maria = $make($this->oldHome, 'Maria', 'Female', 1968, ['father_id' => $lolo->id, 'mother_id' => $lola->id]);
+    $ben = $make($this->oldHome, 'Ben', 'Male', 1993, ['mother_id' => $maria->id]);
+    $elena = $make($this->oldHome, 'Elena', 'Female', 1994, ['spouse_id' => $ben->id]);
     $ben->update(['spouse_id' => $elena->id]);
-    $make($oldHome, 'Dino', 'Male', 2018, ['father_id' => $ben->id]);
+    $make($this->oldHome, 'Dino', 'Male', 2018, ['father_id' => $ben->id]);
 
     $ana = $make($this->anaHome, 'Ana', 'Female', 1990, ['father_id' => $pedro->id]);
     $this->anaHome->update(['head_resident_id' => $ana->id]);
@@ -81,5 +81,22 @@ it('stays in the relatives list when the reach is changed', function () {
         ->wait(1)
         ->assertSee('7 people.')
         ->assertAttribute('button:has-text("Relatives list")', 'aria-pressed', 'true')
+        ->assertNoJavaScriptErrors();
+});
+
+it('says plainly when a wider reach has nobody more to add', function () {
+    $this->actingAs($this->superAdmin);
+
+    // This household's own members already reach almost the whole family, so the widest level adds nobody.
+    visit("/family-tree/{$this->oldHome->id}")
+        ->assertSee('12 people.')
+        ->click('button:has-text("First cousins")')
+        ->wait(1)
+        ->assertSee('13 people.')
+        ->assertSee('Adds 1 more person, such as first cousins.')
+        ->click('button:has-text("Second cousins")')
+        ->wait(1)
+        ->assertSee('13 people.')
+        ->assertSee('Nobody more is related at this distance, so this shows the same people as the shorter reach.')
         ->assertNoJavaScriptErrors();
 });

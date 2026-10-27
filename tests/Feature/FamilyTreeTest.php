@@ -241,3 +241,39 @@ it('only cuts spouses when the family fits but their partners do not', function 
     expect($tree['truncated'])->toBeTrue()->and($tree['truncated_relatives'])->toBeFalse()
         ->and(collect($tree['nodes'])->where('relation_group', 'First cousins'))->toHaveCount(100);
 });
+
+it('says how many people each wider reach added, and none for the close family', function () {
+    $home = fn () => Household::factory()->create(['barangay_id' => $this->household->barangay_id]);
+    $make = fn (Household $h, array $x = []) => Resident::factory()->create([
+        'household_id' => $h->id, 'barangay_id' => $h->barangay_id, 'birthdate' => '1980-01-01', ...$x,
+    ]);
+
+    // Ana lives alone with her daughter, her cousins live elsewhere: Lolo is the grandfather, Ramon his father.
+    $ramon = $make($home(), ['gender' => 'Male']);
+    $ando = $make($home(), ['father_id' => $ramon->id, 'gender' => 'Male']);
+    $lolo = $make($home(), ['father_id' => $ramon->id, 'gender' => 'Male']);
+    $pedro = $make($home(), ['father_id' => $lolo->id, 'gender' => 'Male']);
+    $maria = $make($home(), ['father_id' => $lolo->id, 'gender' => 'Female']);
+    $ben = $make($home(), ['mother_id' => $maria->id, 'gender' => 'Male']);
+    $dino = $make($home(), ['father_id' => $ben->id, 'gender' => 'Male']);
+    $tess = $make($home(), ['father_id' => $ando->id, 'gender' => 'Female']);
+    $uno = $make($home(), ['mother_id' => $tess->id, 'gender' => 'Male']);
+    $anaHome = $home();
+    $ana = $make($anaHome, ['father_id' => $pedro->id, 'gender' => 'Female']);
+
+    $tree = fn (string $reach) => app(BuildFamilyTree::class)->handle($anaHome, $reach);
+
+    expect($tree('close')['added'])->toBe(0)
+        ->and($tree('cousins')['added'])->toBe(2)
+        ->and($tree('wide')['added'])->toBe(3);
+
+    // A household whose own members already reach everyone has nobody left to add.
+    $everyone = $home();
+    foreach ([$ramon, $ando, $lolo, $pedro, $maria, $ben, $dino, $tess, $uno, $ana] as $person) {
+        $person->update(['household_id' => $everyone->id]);
+    }
+
+    expect($tree('close')['added'])->toBe(0);
+    expect(app(BuildFamilyTree::class)->handle($everyone, 'cousins')['added'])->toBe(0)
+        ->and(app(BuildFamilyTree::class)->handle($everyone, 'wide')['added'])->toBe(0);
+});
