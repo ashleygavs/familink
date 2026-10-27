@@ -436,3 +436,12 @@ While in the "built files" mode, code changes do not appear until you run `npm r
 - *Phone not listed in `chrome://inspect`:* try another cable (many only charge), unlock the phone, and accept the "Allow USB debugging" prompt.
 - *No camera prompt:* make sure the address is exactly `http://localhost:8000`, not the `192.168...` address, and the green port-forwarding dot is on.
 - *iPhone:* USB forwarding does not work. You need an https tunnel (for example `cloudflared`), which needs internet.
+
+## Automated browser tests (optional, for developers)
+
+Besides this manual guide, the key flows are checked by a real browser that clicks through the screens: login (each role's first page, the wrong-password message and the forced password change), registering a resident, approving or archiving and confirming a suggested family link, the scanner (green the first time, red the second, red for someone not approved or an unknown ID), and the super admin's screens (creating a staff account, setting a temporary password from the Edit form and reading it in that account's history, deactivating and reactivating one, deleting an account that never did anything, adding a municipality and a barangay, an admin being kept out of those screens, and relief events: creating, activating, locked dates, closing and deleting a draft). They run on a throwaway database, never on your data.
+
+- One-time setup on a PC: `npm install` and `npx playwright install chromium`.
+- The site's scripts must be available: keep `composer run dev` running, or run `npm run build` first (and delete `public/hot` if the dev server is not running).
+- Run them with `composer run test:browser`. They are not part of the normal `php artisan test`, because they need the browser and are slower (about 15 seconds).
+- If a step fails, a screenshot of the page is saved in `tests/Browser/Screenshots`. The camera itself cannot be tested this way: the scanner test types the resident ID, which uses the same check as a QR scan.

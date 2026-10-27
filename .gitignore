@@ -42,3 +42,6 @@ yarn-error.log
 /boost.json
 /opencode.json
 /opencode.jsonc
+
+# Screenshots the browser tests save when a step fails
+/tests/Browser/Screenshots

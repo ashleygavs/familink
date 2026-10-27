@@ -804,6 +804,17 @@ export default function FamilyTree({ household, tree }: Props) {
         };
     }, [tree, view]);
 
+    // A person chosen on a wider reach may not be in a shorter one, so the choice is dropped rather than left pointing
+    // at someone who is no longer shown.
+    useEffect(() => {
+        if (
+            selectedId !== null &&
+            !tree.nodes.some((node) => node.id === selectedId)
+        ) {
+            setSelectedId(null);
+        }
+    }, [selectedId, tree]);
+
     // Light up how the chosen person is related to the reference person.
     useEffect(() => {
         const path =
@@ -906,7 +917,12 @@ export default function FamilyTree({ household, tree }: Props) {
                                                           },
                                                 ).url,
                                                 {},
-                                                { preserveScroll: true },
+                                                // Keeps the view (tree or list) and the search as they are, instead of
+                                                // starting the page again, when the reach changes.
+                                                {
+                                                    preserveScroll: true,
+                                                    preserveState: true,
+                                                },
                                             )
                                         }
                                     >
