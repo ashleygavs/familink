@@ -1,10 +1,12 @@
 import { Head, router } from '@inertiajs/react';
 import {
+    Download,
     Home,
     List,
     LocateFixed,
     Maximize,
     Network as NetworkIcon,
+    Printer,
     Search,
     ZoomIn,
     ZoomOut,
@@ -16,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { groupRelatives, pathBetween } from '@/lib/family-tree';
 import type { FamilyEdge } from '@/lib/family-tree';
+import { renderTreeImage } from '@/lib/family-tree-image';
 import { dashboard, familyTree } from '@/routes';
 
 type TreeNode = {
@@ -670,6 +673,8 @@ export default function FamilyTree({ household, tree }: Props) {
     );
     const [selectedId, setSelectedId] = useState<number | null>(null);
     const [search, setSearch] = useState('');
+    const [exporting, setExporting] = useState<'save' | 'print' | null>(null);
+    const [exportFailed, setExportFailed] = useState(false);
     const selected = tree.nodes.find((node) => node.id === selectedId) ?? null;
 
     useEffect(() => {
@@ -997,6 +1002,119 @@ export default function FamilyTree({ household, tree }: Props) {
         }
     }
 
+    /** A picture of the whole tree as it is drawn now, without the fading of a chosen person's family line. */
+    function treePicture(): HTMLCanvasElement {
+        const current = drawing.current;
+
+        if (current === null) {
+            throw new Error('The tree is not drawn yet.');
+        }
+
+        const reach = reaches.find((option) => option.value === tree.reach);
+
+        return renderTreeImage(
+            current.nodes.get().map((node) => ({ ...node, opacity: 1 })),
+            current.edges.get().map((edge) => ({
+                ...edge,
+                width: 1,
+                color: { color: current.colours.get(Number(edge.id)) },
+            })),
+            BOX_WIDTH,
+            {
+                title: `Family Tree: ${household.household_code}`,
+                details: [
+                    [
+                        household.street_address,
+                        `Barangay ${household.barangay_name}`,
+                        household.head_name
+                            ? `Head: ${household.head_name}`
+                            : null,
+                    ]
+                        .filter(Boolean)
+                        .join(' · '),
+                    `${reach?.label.replace('+ ', 'Up to ') ?? ''} · ${tree.nodes.length} people · Made on ${new Date().toLocaleDateString()}`,
+                    tree.reference
+                        ? `Each person is labelled by how they are related to ${tree.reference.name}.`
+                        : '',
+                ].filter((line) => line !== ''),
+                legend: [
+                    'Blue box: male. Pink box: female. Thick border: lives in this household. Dashed box: named by a relative, not registered yet. † Deceased.',
+                    'Dashed pink line: married. Dotted grey line: marriage ended (separated or annulled).',
+                ],
+            },
+        );
+    }
+
+    function saveImage() {
+        setExporting('save');
+        setExportFailed(false);
+
+        try {
+            treePicture().toBlob((blob) => {
+                if (blob === null) {
+                    setExportFailed(true);
+                    setExporting(null);
+
+                    return;
+                }
+
+                const link = document.createElement('a');
+
+                link.href = URL.createObjectURL(blob);
+                link.download = `family-tree-${household.household_code}-${tree.reach}.png`;
+                link.click();
+                URL.revokeObjectURL(link.href);
+                setExporting(null);
+            }, 'image/png');
+        } catch {
+            setExportFailed(true);
+            setExporting(null);
+        }
+    }
+
+    /** Prints the picture on its own, in a hidden frame, so the menu and buttons of the page are not on the paper. */
+    function printImage() {
+        setExporting('print');
+        setExportFailed(false);
+
+        try {
+            const picture = treePicture().toDataURL('image/png');
+            const frame = document.createElement('iframe');
+
+            frame.style.cssText =
+                'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+            document.body.appendChild(frame);
+
+            const page = frame.contentDocument;
+            const view = frame.contentWindow;
+
+            if (page === null || view === null) {
+                throw new Error('The print page could not be made.');
+            }
+
+            const style = page.createElement('style');
+            const image = page.createElement('img');
+            const done = () => frame.remove();
+
+            style.textContent =
+                '@page{size:landscape;margin:10mm}html,body{margin:0}img{display:block;max-width:100%;max-height:185mm;margin:0 auto}';
+            page.title = `Family tree ${household.household_code}`;
+            page.head.append(style);
+            image.onload = () => {
+                view.focus();
+                view.print();
+                setExporting(null);
+            };
+            view.onafterprint = done;
+            window.setTimeout(done, 120000);
+            image.src = picture;
+            page.body.append(image);
+        } catch {
+            setExportFailed(true);
+            setExporting(null);
+        }
+    }
+
     /** Chooses a person, and brings them into view on the tree when it is showing. */
     function choose(id: number) {
         setSelectedId(id);
@@ -1180,7 +1298,34 @@ export default function FamilyTree({ household, tree }: Props) {
                                         <Maximize />
                                         Fit all
                                     </Button>
+                                    <Button
+                                        variant="outline"
+                                        disabled={exporting !== null}
+                                        onClick={saveImage}
+                                    >
+                                        <Download />
+                                        {exporting === 'save'
+                                            ? 'Making the picture...'
+                                            : 'Save as image'}
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        disabled={exporting !== null}
+                                        onClick={printImage}
+                                    >
+                                        <Printer />
+                                        Print
+                                    </Button>
                                 </div>
+                                {exportFailed && (
+                                    <p
+                                        role="alert"
+                                        className="rounded-xl border-2 border-red-300 bg-red-50 p-3 text-base text-red-950"
+                                    >
+                                        The picture could not be made. Try a
+                                        shorter reach, or reload the page.
+                                    </p>
+                                )}
                                 <p className="text-base text-muted-foreground">
                                     Drag to move, scroll to zoom. Click a person
                                     to see how they are related

@@ -99,6 +99,23 @@ it('shows a marriage that has ended in the legend and on the person', function (
         ->assertNoJavaScriptErrors();
 });
 
+it('makes a picture of the whole tree to save or print', function () {
+    $this->actingAs($this->superAdmin);
+
+    // The picture is handed over as a file, so the page's own file link is read to prove one was made.
+    $page = visit("/family-tree/{$this->anaHome->id}")->assertSee('7 people.');
+    $page->script('window.__picture = null; const make = URL.createObjectURL; URL.createObjectURL = (blob) => { window.__picture = blob.type + ":" + blob.size; return make.call(URL, blob); }; 0;');
+
+    $page->click('button:has-text("Save as image")')->wait(2);
+
+    expect($page->script('window.__picture'))->toStartWith('image/png:');
+
+    $page->click('button:has-text("Print")')
+        ->wait(2)
+        ->assertDontSee('The picture could not be made')
+        ->assertNoJavaScriptErrors();
+});
+
 it('says plainly when a wider reach has nobody more to add', function () {
     $this->actingAs($this->superAdmin);
 
