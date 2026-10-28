@@ -1,5 +1,7 @@
 <?php
 
+use App\Actions\Residents\EndMarriage;
+use App\Enums\CivilStatus;
 use App\Enums\RoleName;
 use App\Models\Barangay;
 use App\Models\Household;
@@ -81,6 +83,19 @@ it('stays in the relatives list when the reach is changed', function () {
         ->wait(1)
         ->assertSee('7 people.')
         ->assertAttribute('button:has-text("Relatives list")', 'aria-pressed', 'true')
+        ->assertNoJavaScriptErrors();
+});
+
+it('shows a marriage that has ended in the legend and on the person', function () {
+    $this->actingAs($this->superAdmin);
+    $ben = Resident::query()->where('first_name', 'Ben')->firstOrFail();
+    app(EndMarriage::class)->handle($this->superAdmin, $ben, CivilStatus::Separated);
+
+    visit("/family-tree/{$this->oldHome->id}")
+        ->assertSee('Marriage ended (separated or annulled)')
+        ->click('button:has-text("Relatives list")')
+        ->click('button[aria-pressed]:has-text("Elena Sampleton")')
+        ->assertSee('Separated from Ben Sampleton.')
         ->assertNoJavaScriptErrors();
 });
 

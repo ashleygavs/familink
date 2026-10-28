@@ -15,6 +15,7 @@ import type { Edge, Node } from 'vis-network/standalone';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { groupRelatives, pathBetween } from '@/lib/family-tree';
+import type { FamilyEdge } from '@/lib/family-tree';
 import { dashboard, familyTree } from '@/routes';
 
 type TreeNode = {
@@ -33,6 +34,8 @@ type TreeNode = {
     relation_group: string | null;
     /** How far away the person is, for ordering a list. */
     relation_rank: number | null;
+    /** Lines about the person's marriages that are over, such as "Separated from Elena Sampleton." */
+    marriage_notes: string[];
 };
 
 type Reach = 'close' | 'cousins' | 'wide';
@@ -43,7 +46,13 @@ const reaches: { value: Reach; label: string }[] = [
     { value: 'wide', label: '+ Second cousins' },
 ];
 
-type TreeEdge = { from: number; to: number; kind: 'parent' | 'spouse' };
+type TreeEdge = {
+    from: number;
+    to: number;
+    kind: 'parent' | 'spouse' | 'ended';
+    /** How an ended marriage ended: Separated or Annulled. */
+    status?: string;
+};
 
 type Props = {
     household: {
@@ -150,8 +159,17 @@ function unions(edges: TreeEdge[]): { unions: Union[]; single: TreeEdge[] } {
     return { unions: [...byCouple.values()], single };
 }
 
+const DOTTED = [2, 6];
+const ENDED_FONT = {
+    size: 12,
+    color: '#475569',
+    strokeWidth: 3,
+    strokeColor: '#ffffff',
+};
 const BOX_WIDTH = 160;
 const COUPLE_GAP = 80;
+/** Wider than a couple's gap, so the word "Separated" or "Annulled" fits between the two boxes. */
+const ENDED_GAP = 120;
 const SIBLING_GAP = 40;
 const ROW_HEIGHT = 150;
 
@@ -261,10 +279,24 @@ function arrange(
         partners.set(b, (partners.get(b) ?? new Set<number>()).add(a));
     };
 
+    // A marriage that has ended is drawn beside the pair like a marriage, only with a wider gap and a dotted line.
+    const endedPairs = new Set<string>();
+
     tree.edges
-        .filter((edge) => edge.kind === 'spouse')
-        .forEach((edge) => pair(edge.from, edge.to));
+        .filter((edge) => edge.kind !== 'parent')
+        .forEach((edge) => {
+            pair(edge.from, edge.to);
+
+            if (edge.kind === 'ended') {
+                endedPairs.add(`${edge.from}-${edge.to}`);
+            }
+        });
     grouped.unions.forEach((union) => pair(union.parents[0], union.parents[1]));
+
+    const gapBetween = (a: number, b: number): number =>
+        endedPairs.has(`${Math.min(a, b)}-${Math.max(a, b)}`)
+            ? ENDED_GAP
+            : COUPLE_GAP;
 
     for (const chain of chains(partners, birth)) {
         const flip =
@@ -318,8 +350,22 @@ function arrange(
     // Children stay in the order of the pair they belong to, left to right along the chain.
     all.forEach((unit) => unit.children.sort((a, b) => a.order - b.order));
 
+    /** How far each person in a row is from the left edge of the row. */
+    const offsets = (unit: Unit): number[] =>
+        unit.people.reduce<number[]>(
+            (found, id, index) => [
+                ...found,
+                index === 0
+                    ? 0
+                    : found[index - 1] +
+                      BOX_WIDTH +
+                      gapBetween(unit.people[index - 1], id),
+            ],
+            [],
+        );
+
     const rowWidth = (unit: Unit): number =>
-        unit.people.length * BOX_WIDTH + (unit.people.length - 1) * COUPLE_GAP;
+        (offsets(unit).at(-1) ?? 0) + BOX_WIDTH;
 
     const measure = (unit: Unit): number => {
         unit.spread =
@@ -336,9 +382,11 @@ function arrange(
         const first =
             left + unit.width / 2 - rowWidth(unit) / 2 + BOX_WIDTH / 2;
 
+        const along = offsets(unit);
+
         unit.people.forEach((id, index) =>
             positions.set(id, {
-                x: first + index * (BOX_WIDTH + COUPLE_GAP),
+                x: first + along[index],
                 y: (level.get(id) ?? 0) * ROW_HEIGHT,
             }),
         );
@@ -452,6 +500,11 @@ function focusHousehold(instance: Network, tree: Props['tree']) {
     const ring = new Set(members);
 
     for (const edge of tree.edges) {
+        // An ex-spouse is no part of the household's close family, so the view does not stretch to reach them.
+        if (edge.kind === 'ended') {
+            continue;
+        }
+
         if (members.includes(edge.from)) {
             ring.add(edge.to);
         }
@@ -630,8 +683,16 @@ export default function FamilyTree({ household, tree }: Props) {
                 .filter((edge) => edge.kind === 'spouse')
                 .map((edge) => `union-${edge.from}-${edge.to}`),
         );
+        const ended = new Map(
+            tree.edges
+                .filter((edge) => edge.kind === 'ended')
+                .map((edge) => [`union-${edge.from}-${edge.to}`, edge.status]),
+        );
         const level = generations(tree.nodes, [
-            ...tree.edges,
+            // An ex sits on the same row as the person, as a spouse does.
+            ...tree.edges.map((edge): TreeEdge =>
+                edge.kind === 'ended' ? { ...edge, kind: 'spouse' } : edge,
+            ),
             ...grouped.unions.map((union): TreeEdge => ({
                 from: union.parents[0],
                 to: union.parents[1],
@@ -660,9 +721,44 @@ export default function FamilyTree({ household, tree }: Props) {
             size: 5,
             fixed: true,
             color: { background: '#64748b', border: '#64748b' },
-            label: '',
+            // How a marriage ended is said once, above the dot between the couple.
+            label: ended.get(union.id) ?? '',
+            font: { ...ENDED_FONT, vadjust: -26 },
         }));
-        const nodes = new DataSet<Node>([...people, ...junctions]);
+        // A marriage that ended without children has no dot to carry its word, so the word sits mid-way above the line.
+        const endedWords: Node[] = tree.edges
+            .filter(
+                (edge) =>
+                    edge.kind === 'ended' &&
+                    !grouped.unions.some(
+                        (union) =>
+                            union.parents[0] === edge.from &&
+                            union.parents[1] === edge.to,
+                    ),
+            )
+            .flatMap((edge): Node[] => {
+                const a = position.get(edge.from);
+                const b = position.get(edge.to);
+
+                return a && b
+                    ? [
+                          {
+                              id: `ended-${edge.from}-${edge.to}`,
+                              x: (a.x + b.x) / 2,
+                              y: (a.y + b.y) / 2 - 14,
+                              shape: 'text',
+                              fixed: true,
+                              label: edge.status,
+                              font: ENDED_FONT,
+                          },
+                      ]
+                    : [];
+            });
+        const nodes = new DataSet<Node>([
+            ...people,
+            ...junctions,
+            ...endedWords,
+        ]);
         const down = {
             enabled: true,
             type: 'cubicBezier',
@@ -679,7 +775,12 @@ export default function FamilyTree({ household, tree }: Props) {
         }[] = [
             ...grouped.unions.flatMap((union) => {
                 const colour = married.has(union.id) ? pink : grey;
-                const style = married.has(union.id) ? { dashes: true } : {};
+                const how = ended.get(union.id);
+                const style = married.has(union.id)
+                    ? { dashes: true }
+                    : how
+                      ? { dashes: DOTTED }
+                      : {};
                 const [first, second] = union.parents;
                 // A line to the junction stands for the couple, and for each child of the couple.
                 const side = (parent: number) => ({
@@ -752,6 +853,27 @@ export default function FamilyTree({ household, tree }: Props) {
                     colour: pink,
                     pairs: [[edge.from, edge.to]] as [number, number][],
                 })),
+            // An ended marriage with children is drawn through its junction, so this line is only for the others.
+            ...tree.edges
+                .filter(
+                    (edge) =>
+                        edge.kind === 'ended' &&
+                        !grouped.unions.some(
+                            (union) =>
+                                union.parents[0] === edge.from &&
+                                union.parents[1] === edge.to,
+                        ),
+                )
+                .map((edge) => ({
+                    line: {
+                        from: edge.from,
+                        to: edge.to,
+                        dashes: DOTTED,
+                        color: { color: grey },
+                    },
+                    colour: grey,
+                    pairs: [[edge.from, edge.to]] as [number, number][],
+                })),
         ];
         const items: Edge[] = lines.map((entry, index) => ({
             id: index,
@@ -775,7 +897,10 @@ export default function FamilyTree({ household, tree }: Props) {
             nodes,
             edges,
             personIds: tree.nodes.map((node) => node.id),
-            junctionIds: grouped.unions.map((union) => union.id),
+            junctionIds: [
+                ...grouped.unions.map((union) => union.id),
+                ...endedWords.map((word) => String(word.id)),
+            ],
             pairs,
             colours,
             junctionOf,
@@ -848,7 +973,14 @@ export default function FamilyTree({ household, tree }: Props) {
             tree.reference !== null &&
             selectedId !== null &&
             selectedId !== tree.reference.id
-                ? pathBetween(tree.edges, tree.reference.id, selectedId)
+                ? pathBetween(
+                      // A marriage that has ended is no family link, so the line of relation does not run through it.
+                      tree.edges.filter(
+                          (edge): edge is FamilyEdge => edge.kind !== 'ended',
+                      ),
+                      tree.reference.id,
+                      selectedId,
+                  )
                 : null;
 
         highlight(drawing.current, path);
@@ -1084,8 +1216,13 @@ export default function FamilyTree({ household, tree }: Props) {
                                         Married
                                     </li>
                                     <li className="flex items-center gap-2">
+                                        <span className="h-0 w-6 border-t-2 border-dotted border-slate-500" />
+                                        Marriage ended (separated or annulled)
+                                    </li>
+                                    <li className="flex items-center gap-2">
                                         <span className="size-4 rounded border-2 border-dashed border-slate-500" />
-                                        Listed, not registered yet
+                                        Named by a relative but not registered
+                                        yet, so no record of their own
                                     </li>
                                     <li>† Deceased</li>
                                 </ul>
@@ -1127,6 +1264,9 @@ export default function FamilyTree({ household, tree }: Props) {
                                         ? ` · ${selected.household_code}`
                                         : ''}
                                 </p>
+                                {selected.marriage_notes.map((note, index) => (
+                                    <p key={`${index}-${note}`}>{note}</p>
+                                ))}
                                 {selected.household_code &&
                                     !selected.in_household && (
                                         <p className="text-muted-foreground">

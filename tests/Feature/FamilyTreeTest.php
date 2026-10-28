@@ -1,6 +1,10 @@
 <?php
 
 use App\Actions\Relief\BuildFamilyTree;
+use App\Actions\Residents\EndMarriage;
+use App\Actions\Residents\MarkDeceased;
+use App\Actions\Residents\RecordMarriage;
+use App\Enums\CivilStatus;
 use App\Enums\ResidentStatus;
 use App\Enums\RoleName;
 use App\Models\Household;
@@ -240,6 +244,99 @@ it('only cuts spouses when the family fits but their partners do not', function 
 
     expect($tree['truncated'])->toBeTrue()->and($tree['truncated_relatives'])->toBeFalse()
         ->and(collect($tree['nodes'])->where('relation_group', 'First cousins'))->toHaveCount(100);
+});
+
+it('draws a marriage that has ended and says how it ended on both people', function () {
+    $admin = User::factory()->withRole(RoleName::SuperAdmin)->create();
+    $ben = ($this->make)('Ben', 'Male', ['birthdate' => '1985-01-01']);
+    $elena = ($this->make)('Elena', 'Female', ['birthdate' => '1986-01-01', 'spouse_id' => $ben->id]);
+    $ben->update(['spouse_id' => $elena->id]);
+    $dino = ($this->make)('Dino', 'Male', ['father_id' => $ben->id, 'mother_id' => $elena->id]);
+
+    $rita = ($this->make)('Rita', 'Female', ['birthdate' => '1980-01-01']);
+    $omar = ($this->make)('Omar', 'Male', ['birthdate' => '1979-01-01', 'spouse_id' => $rita->id]);
+    $rita->update(['spouse_id' => $omar->id]);
+
+    app(EndMarriage::class)->handle($admin, $ben, CivilStatus::Separated);
+    app(EndMarriage::class)->handle($admin, $rita, CivilStatus::Annulled);
+
+    $tree = treeFor($this->household);
+    $notes = collect($tree['nodes'])->pluck('marriage_notes', 'name');
+    $ended = collect($tree['edges'])->where('kind', 'ended');
+
+    $pairOf = fn (Resident $a, Resident $b): array => ['from' => min($a->id, $b->id), 'to' => max($a->id, $b->id)];
+
+    expect(collect($tree['edges'])->where('kind', 'spouse'))->toHaveCount(0)
+        ->and($ended)->toHaveCount(2)
+        ->and($ended->firstWhere('from', $pairOf($ben, $elena)['from']))->toMatchArray([...$pairOf($ben, $elena), 'status' => 'Separated'])
+        ->and($ended->firstWhere('from', $pairOf($rita, $omar)['from']))->toMatchArray([...$pairOf($rita, $omar), 'status' => 'Annulled'])
+        ->and($notes[$ben->full_name])->toBe(["Separated from {$elena->full_name}."])
+        ->and($notes[$elena->full_name])->toBe(["Separated from {$ben->full_name}."])
+        ->and($notes[$rita->full_name])->toBe(["Marriage to {$omar->full_name} was annulled."])
+        ->and($notes[$dino->full_name])->toBe([]);
+});
+
+it('leaves out an ended marriage when they are married again, or when the ex is not on the tree', function () {
+    $admin = User::factory()->withRole(RoleName::SuperAdmin)->create();
+    $husband = ($this->make)('Hal', 'Male', ['birthdate' => '1980-01-01']);
+    $wife = ($this->make)('Wanda', 'Female', ['birthdate' => '1981-01-01', 'spouse_id' => $husband->id]);
+    $husband->update(['spouse_id' => $wife->id]);
+
+    app(EndMarriage::class)->handle($admin, $husband, CivilStatus::Separated);
+
+    expect(collect(treeFor($this->household)['edges'])->where('kind', 'ended'))->toHaveCount(1);
+
+    app(RecordMarriage::class)->handle($admin, $husband->fresh(), $wife->fresh());
+
+    $tree = treeFor($this->household);
+
+    expect(collect($tree['edges'])->where('kind', 'ended'))->toHaveCount(0)
+        ->and(collect($tree['edges'])->where('kind', 'spouse'))->toHaveCount(1)
+        ->and(collect($tree['nodes'])->pluck('marriage_notes')->flatten())->toHaveCount(0);
+
+    // An ex who lives elsewhere and has no other link to the household is not brought onto the tree by the old marriage.
+    $stranger = Household::factory()->create(['barangay_id' => $this->household->barangay_id]);
+    $ex = Resident::factory()->create(['household_id' => $stranger->id, 'barangay_id' => $stranger->barangay_id, 'gender' => 'Male', 'birthdate' => '1978-01-01']);
+    $other = ($this->make)('Olga', 'Female', ['birthdate' => '1979-01-01', 'spouse_id' => $ex->id]);
+    $ex->update(['spouse_id' => $other->id]);
+    app(EndMarriage::class)->handle($admin, $other, CivilStatus::Separated);
+
+    $tree = treeFor($this->household);
+
+    expect(collect($tree['nodes'])->pluck('id'))->not->toContain($ex->id)
+        ->and(collect($tree['nodes'])->firstWhere('id', $other->id)['marriage_notes'])->toBe([])
+        ->and(collect($tree['edges'])->where('kind', 'ended'))->toHaveCount(0);
+});
+
+it('says widow or widower, and still does after the widowed person marries again', function () {
+    $admin = User::factory()->withRole(RoleName::SuperAdmin)->create();
+    // The widowed person has the lower id, which is the case where only the late spouse still points to them.
+    $widow = ($this->make)('Wilma', 'Female', ['birthdate' => '1960-01-01']);
+    $late = ($this->make)('Lando', 'Male', ['birthdate' => '1958-01-01', 'spouse_id' => $widow->id]);
+    $widow->update(['spouse_id' => $late->id]);
+
+    app(MarkDeceased::class)->handle($admin, $late);
+
+    $notes = fn () => collect(treeFor($this->household)['nodes'])->pluck('marriage_notes', 'id');
+
+    expect($notes()[$widow->id])->toBe(["Widow of {$late->full_name}."])->and($notes()[$late->id])->toBe([]);
+
+    $suitor = ($this->make)('Sam', 'Male', ['birthdate' => '1959-01-01']);
+    app(RecordMarriage::class)->handle($admin, $widow->fresh(), $suitor);
+
+    $tree = treeFor($this->household);
+    $pairs = collect($tree['edges'])->where('kind', 'spouse')->map(fn (array $edge): array => [$edge['from'], $edge['to']])->all();
+
+    expect(collect($tree['nodes'])->firstWhere('id', $widow->id)['marriage_notes'])->toBe(["Widow of {$late->full_name}."])
+        ->and($pairs)->toContain([min($widow->id, $late->id), max($widow->id, $late->id)])
+        ->and($pairs)->toContain([min($widow->id, $suitor->id), max($widow->id, $suitor->id)]);
+
+    $man = ($this->make)('Marco', 'Male', ['birthdate' => '1950-01-01']);
+    $wife = ($this->make)('Mina', 'Female', ['birthdate' => '1951-01-01', 'spouse_id' => $man->id]);
+    $man->update(['spouse_id' => $wife->id]);
+    app(MarkDeceased::class)->handle($admin, $wife);
+
+    expect(collect(treeFor($this->household)['nodes'])->firstWhere('id', $man->id)['marriage_notes'])->toBe(["Widower of {$wife->full_name}."]);
 });
 
 it('says how many people each wider reach added, and none for the close family', function () {

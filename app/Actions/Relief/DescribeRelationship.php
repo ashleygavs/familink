@@ -53,7 +53,8 @@ class DescribeRelationship
             return $blood;
         }
 
-        if (($this->spouses[$reference] ?? null) === $person) {
+        // Either one may be the one still pointing to the other: a late spouse keeps pointing to a widow who married again.
+        if (($this->spouses[$reference] ?? null) === $person || ($this->spouses[$person] ?? null) === $reference) {
             return ['label' => $this->term($person, 'Husband', 'Wife', 'Spouse'), 'group' => 'Husband or wife', 'rank' => 1];
         }
 

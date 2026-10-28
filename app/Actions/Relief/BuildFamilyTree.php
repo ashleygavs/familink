@@ -5,6 +5,7 @@ namespace App\Actions\Relief;
 use App\Enums\ResidentStatus;
 use App\Models\Household;
 use App\Models\Resident;
+use App\Models\ResidentChange;
 
 /**
  * Gathers the family around a household as graph data: its members, then their parents, spouses and children, a few
@@ -12,8 +13,8 @@ use App\Models\Resident;
  * parents and children are followed, so the tree grows along blood lines and not into every in-law's family. The size
  * is capped so a very large family stays readable and fast.
  *
- * @phpstan-type TreeNode array{id: int, name: string, gender: string, birth_year: int, status: string, barangay_name: string|null, household_code: string|null, in_household: bool, is_deceased: bool, relation: string|null, relation_group: string|null, relation_rank: int|null}
- * @phpstan-type TreeEdge array{from: int, to: int, kind: string}
+ * @phpstan-type TreeNode array{id: int, name: string, gender: string, birth_year: int, status: string, barangay_name: string|null, household_code: string|null, in_household: bool, is_deceased: bool, relation: string|null, relation_group: string|null, relation_rank: int|null, marriage_notes: list<string>}
+ * @phpstan-type TreeEdge array{from: int, to: int, kind: string, status?: string}
  */
 class BuildFamilyTree
 {
@@ -97,6 +98,9 @@ class BuildFamilyTree
 
         $relationship = fn (Resident $resident): ?array => $reference === null ? null : $describe->classify($reference->id, $resident->id);
 
+        ['pairs' => $endedPairs, 'notes' => $endedNotes] = $this->endedMarriages($residents->all());
+        $widowedNotes = $this->widowedNotes($residents->all());
+
         return [
             'nodes' => array_values($residents->map(fn (Resident $resident): array => [
                 'id' => $resident->id,
@@ -111,8 +115,9 @@ class BuildFamilyTree
                 'relation' => $relationship($resident)['label'] ?? null,
                 'relation_group' => $relationship($resident)['group'] ?? null,
                 'relation_rank' => $relationship($resident)['rank'] ?? null,
+                'marriage_notes' => [...($widowedNotes[$resident->id] ?? []), ...($endedNotes[$resident->id] ?? [])],
             ])->all()),
-            'edges' => $this->edges($residents->all()),
+            'edges' => $this->edges($residents->all(), $endedPairs),
             'truncated' => $truncated,
             'truncated_relatives' => $truncatedRelatives,
             'reference' => $reference === null ? null : ['id' => $reference->id, 'name' => $reference->full_name],
@@ -210,14 +215,17 @@ class BuildFamilyTree
     }
 
     /**
-     * Parent to child lines, and one line for each married pair.
+     * Parent to child lines, one line for each married pair, and one for each marriage that has ended. A pair is
+     * drawn once even when only one of them still points to the other, which happens when a widowed person remarries.
      *
      * @param  array<int, Resident>  $residents
+     * @param  array<string, string>  $ended  The ended marriages, by the pair's ids joined with a dash, and how each ended.
      * @return list<TreeEdge>
      */
-    private function edges(array $residents): array
+    private function edges(array $residents, array $ended): array
     {
         $edges = [];
+        $married = [];
 
         foreach ($residents as $resident) {
             foreach ([$resident->father_id, $resident->mother_id] as $parentId) {
@@ -226,11 +234,97 @@ class BuildFamilyTree
                 }
             }
 
-            if ($resident->spouse_id !== null && isset($residents[$resident->spouse_id]) && $resident->id < $resident->spouse_id) {
-                $edges[] = ['from' => $resident->id, 'to' => $resident->spouse_id, 'kind' => 'spouse'];
+            if ($resident->spouse_id !== null && isset($residents[$resident->spouse_id])) {
+                $married[$this->pairKey($resident->id, $resident->spouse_id)] = true;
             }
         }
 
+        foreach (array_keys($married) as $key) {
+            [$from, $to] = array_map('intval', explode('-', $key));
+            $edges[] = ['from' => $from, 'to' => $to, 'kind' => 'spouse'];
+        }
+
+        foreach ($ended as $key => $how) {
+            [$from, $to] = array_map('intval', explode('-', $key));
+            $edges[] = ['from' => $from, 'to' => $to, 'kind' => 'ended', 'status' => $how];
+        }
+
         return $edges;
+    }
+
+    private function pairKey(int $first, int $second): string
+    {
+        return min($first, $second).'-'.max($first, $second);
+    }
+
+    /**
+     * The marriages of the people shown that have ended, as recorded in the history when the marriage was ended. A pair
+     * that is married again is left out, and only the latest ending of a pair counts. Both people must be on the tree, so
+     * an ex-spouse is never what brings someone into it.
+     *
+     * @param  array<int, Resident>  $residents
+     * @return array{pairs: array<string, string>, notes: array<int, list<string>>}
+     */
+    private function endedMarriages(array $residents): array
+    {
+        $pairs = [];
+        $notes = [];
+
+        $changes = ResidentChange::query()
+            ->where('type', ResidentChange::MARRIAGE_ENDED)
+            ->whereIn('resident_id', array_keys($residents))
+            ->orderBy('id')
+            ->get(['resident_id', 'data']);
+
+        foreach ($changes as $change) {
+            $person = $residents[$change->resident_id] ?? null;
+            $partner = $residents[(int) ($change->data['spouse_id'] ?? 0)] ?? null;
+            $how = $change->data['civil_status'] ?? null;
+
+            if ($person === null || $partner === null || ! in_array($how, ['Separated', 'Annulled'], true)) {
+                continue;
+            }
+
+            if ($person->spouse_id === $partner->id || $partner->spouse_id === $person->id) {
+                unset($notes[$person->id][$partner->id]);
+
+                continue;
+            }
+
+            $pairs[$this->pairKey($person->id, $partner->id)] = $how;
+            $notes[$person->id][$partner->id] = $how === 'Annulled'
+                ? "Marriage to {$partner->full_name} was annulled."
+                : "Separated from {$partner->full_name}.";
+        }
+
+        return [
+            'pairs' => $pairs,
+            'notes' => array_map(fn (array $lines): array => array_values($lines), $notes),
+        ];
+    }
+
+    /**
+     * "Widow of" and "Widower of" for the living spouse of someone who has died. It is read from the side of the person
+     * who died, so it still shows when the widowed person has married again.
+     *
+     * @param  array<int, Resident>  $residents
+     * @return array<int, list<string>>
+     */
+    private function widowedNotes(array $residents): array
+    {
+        $notes = [];
+
+        foreach ($residents as $deceased) {
+            $survivor = $deceased->spouse_id === null ? null : ($residents[$deceased->spouse_id] ?? null);
+
+            if (! $deceased->is_deceased || $survivor === null || $survivor->is_deceased) {
+                continue;
+            }
+
+            $word = $survivor->gender === 'Male' ? 'Widower' : 'Widow';
+            $notes[$survivor->id][] = "{$word} of {$deceased->full_name}.";
+        }
+
+        return $notes;
     }
 }

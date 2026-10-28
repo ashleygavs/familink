@@ -18,6 +18,7 @@ it('lets a super admin add a municipality and then a barangay to it', function (
         ->type('#m-province', 'Pampanga')
         ->press('Save')
         ->assertSee('Lubao')
+        ->wait(1)
         ->press('Add barangay')
         ->type('#b-name', 'Santa Cruz')
         ->type('#b-code', 'sc')
