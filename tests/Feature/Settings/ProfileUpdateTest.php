@@ -3,6 +3,7 @@
 use App\Enums\RoleName;
 use App\Models\Barangay;
 use App\Models\User;
+use Illuminate\Support\Facades\Route;
 use Inertia\Testing\AssertableInertia as Assert;
 
 test('profile page is displayed', function () {
@@ -60,36 +61,18 @@ test('the profile page shows the email as it is, without a way to change it', fu
         ->assertInertia(fn (Assert $page) => $page->component('settings/profile')->missing('mustVerifyEmail'));
 });
 
-test('user can delete their account', function () {
-    $user = User::factory()->create();
+// Accounts are removed only on the Staff accounts page, by a super admin and never their own, so the last super
+// admin and anyone with records stay protected (see StaffManagementTest). The profile page has no way to delete.
+test('nobody can delete their own account from the profile page, not even the only super admin', function (string $role) {
+    $barangay = Barangay::factory()->create();
+    $user = User::factory()->withRole(RoleName::from($role))->create([
+        'barangay_id' => $role === RoleName::User->value ? $barangay->id : null,
+    ]);
 
-    $response = $this
-        ->actingAs($user)
-        ->delete(route('profile.destroy'), [
-            'password' => 'password',
-        ]);
+    expect(Route::has('profile.destroy'))->toBeFalse();
 
-    $response
-        ->assertSessionHasNoErrors()
-        ->assertRedirect(route('home'));
+    $this->actingAs($user)->delete('/settings/profile', ['password' => 'password'])->assertStatus(405);
 
-    $this->assertGuest();
-    expect($user->fresh())->toBeNull();
-});
-
-test('correct password must be provided to delete account', function () {
-    $user = User::factory()->create();
-
-    $response = $this
-        ->actingAs($user)
-        ->from(route('profile.edit'))
-        ->delete(route('profile.destroy'), [
-            'password' => 'wrong-password',
-        ]);
-
-    $response
-        ->assertSessionHasErrors('password')
-        ->assertRedirect(route('profile.edit'));
-
+    $this->assertAuthenticated();
     expect($user->fresh())->not->toBeNull();
-});
+})->with(['super_admin', 'admin', 'user']);

@@ -12,9 +12,9 @@ Route::middleware(['auth'])->group(function () {
     Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
 });
 
+// There is no route for staff to delete their own account. Accounts are removed on the Staff accounts page, by a
+// super admin and never their own, so the last super admin and accounts with history are always protected.
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-
     Route::get('settings/security', [SecurityController::class, 'edit'])
         ->middleware(RequirePassword::class)
         ->name('security.edit');
