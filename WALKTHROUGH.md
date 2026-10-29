@@ -349,9 +349,7 @@ Do these once, on the computer or host that people will really use. None of them
 - [ ] On the live site, a mistyped address, a page your role cannot open, or a fault shows a friendly page ("We could not find that page", "Your account cannot open this page", "Something went wrong on our side") with a button back to the dashboard, never a technical screen. Check it by opening a nonsense address such as /nothing-here, logged in and logged out.
 - [ ] Install without the developer tools: composer install --no-dev --optimize-autoloader. This leaves out the Laravel Boost route (_boost/browser-logs). The Inertia developer tools page (/_inertia/devtools) only exists while APP_ENV=local, and even then needs a logged-in super admin. With APP_ENV=production, debug is always off, whatever APP_DEBUG says, so check that APP_ENV really is production. Check it by opening /_inertia/devtools/entries: it should say not found.
 - [ ] If the app sits behind a load balancer or a reverse proxy, set TRUSTED_PROXIES to its address(es), comma separated. If you leave it out, the app trusts only this computer, so a visitor cannot fake their address to get around the login lockout.
-- [ ] Do not leave public/hot on the live server (it only exists while 
-pm run dev runs). Run 
-pm run build instead.
+- [ ] Do not leave public/hot on the live server (it only exists while `npm run dev` runs, and a copy left behind after a bad stop makes every page wait for a server that is not running). Run `npm run build` instead.
 - [ ] The login page does not show **Forgot your password?** on purpose, because the site cannot send mail yet. Tell staff to ask a super admin, who resets passwords on the Staff accounts page. When real mail works (MAIL_MAILER, host, user, password in .env), set `SHOW_PASSWORD_RESET_LINK=true` to show the link again. Until then emails are only written to the log file.
 - [ ] Make a backup before the first real use (see below) and decide who makes one each day.
 
@@ -359,7 +357,11 @@ pm run build instead.
 
 ## How to start the system (from nothing)
 
-1. **Start MySQL.** Open XAMPP Control Panel (`C:\xampp\xampp-control.exe`) and click **Start** next to **MySQL**. You do not need Apache.
+1. **The database starts by itself.** It is MariaDB 11.4, installed as a Windows service named `MariaDB` on port **3307**, and Windows starts and stops it with the computer, so there is nothing to start in XAMPP. To check it:
+   ```powershell
+   Get-Service MariaDB
+   ```
+   It should say `Running`. (XAMPP's old MySQL on port 3306 is only a fallback and the app does not use it.)
 2. **Open PowerShell** in the project folder:
    ```powershell
    cd C:\Users\MateBook\FamiLink
@@ -375,20 +377,28 @@ pm run build instead.
 **If something goes wrong**
 - *"Address already in use" or pages hang:* two copies are running. Close all terminals, then run `Get-Process php, node` and stop any left over with `Stop-Process -Id <number>`. Start once.
 - *"Unable to locate file in Vite manifest":* run `npm run build`, or start with the command in step 3.
-- *Database errors:* check MySQL is green in XAMPP, then run `php artisan migrate`.
+- *Database errors:* check `Get-Service MariaDB` says `Running` (if not, start it from a PowerShell opened as administrator with `Start-Service MariaDB`), check `.env` points at host `127.0.0.1`, port `3307`, database `familink`, then run `php artisan config:clear` and `php artisan migrate:status`.
 - *Everything looks old after a change:* press `Ctrl+Shift+R` in the browser.
 
 ## Back up and restore the database
 
-Back up (creates `familink-backup.sql` in the project folder):
+**Automatic daily backup.** A Windows scheduled task named `FamiLink daily database backup` runs every day at 12:30 PM (or as soon as the computer is on and awake, if it missed that time). It saves a zipped copy of the whole `familink` database in `C:\Users\MateBook\Documents\familink-backups`, keeps the last 30 days, and writes `OK` or `FAILED` for each run to `backup.log` in that folder. Look at that log now and then. The copies are on this computer only, so copy the folder to a USB drive from time to time. They contain residents' personal data, so keep them private.
+
+**Back up right now** (same script, same folder):
 ```powershell
-C:\xampp\mysql\bin\mysqldump.exe -u root familink > familink-backup.sql
+powershell -NoProfile -ExecutionPolicy Bypass -File C:\Users\MateBook\Documents\familink-backups\backup-familink.ps1
 ```
 
-Restore (replaces the current data with the backup):
+**Restore** (replaces the current data with a backup, so make a fresh backup first). Unzip the backup you want. The easy way is to open the `.sql` file in HeidiSQL (File, Run SQL file) while connected as root. Or in a PowerShell, with the MariaDB root password (which only you know) typed at the hidden prompt:
 ```powershell
-Get-Content familink-backup.sql | C:\xampp\mysql\bin\mysql.exe -u root familink
+$secret = Read-Host 'MariaDB root password' -AsSecureString
+$env:MYSQL_PWD = [Net.NetworkCredential]::new('', $secret).Password
+cmd /c "`"C:\Program Files\MariaDB 11.4\bin\mysql.exe`" --user=root --host=127.0.0.1 --port=3307 --default-character-set=utf8mb4 < `"C:\path\to\familink-YYYY-MM-DD_HHMM.sql`""
+$env:MYSQL_PWD = $null
 ```
+The mysql tool prints a harmless `--ssl-verify-server-cert` warning here. Afterwards run `php artisan config:clear`. Do not restore into `familink` just to look at a backup: restore into `familink_test` instead (take the `CREATE DATABASE` and `USE` lines out of the file first).
+
+**Looking at the database.** Open **HeidiSQL** from the Start menu and make a connection to host `127.0.0.1`, port `3307`, user `familink_app`. The app user's password is in `.env` (`DB_PASSWORD`). It is not kept anywhere in the repository. The app user can see only the `familink` and `familink_test` databases. `familink_test` is used by the tests that check the real database engine; it can be emptied at any time. XAMPP's phpMyAdmin shows only the old MySQL on port 3306.
 
 Put the test scenario back (adds anything missing, never duplicates):
 ```powershell
