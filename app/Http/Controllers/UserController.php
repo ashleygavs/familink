@@ -260,7 +260,9 @@ class UserController extends Controller
                 }
             }
 
-            if (! $user->exists) {
+            // The person saving the account vouches for the email, since no mail is sent to confirm it. This also
+            // frees an account that was left unverified.
+            if ($user->email_verified_at === null) {
                 $user->email_verified_at = Carbon::now();
             }
 

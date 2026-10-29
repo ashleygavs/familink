@@ -44,6 +44,27 @@ it('lets a super admin create an admin for a municipality and several of its bar
         ->and($created->email_verified_at)->not->toBeNull();
 });
 
+it('keeps an account verified when its email is changed on the Staff accounts page, and frees one left unverified', function () {
+    $encoder = User::factory()->withRole(RoleName::User)->create(['barangay_id' => $this->mine->id]);
+
+    $this->actingAs($this->admin)->put(route('admin.users.update', $encoder), [
+        'name' => $encoder->name, 'email' => 'moved@example.test', 'role' => 'user', 'barangay_id' => $this->mine->id, 'password' => '',
+    ])->assertSessionHasNoErrors();
+
+    expect($encoder->fresh()->email)->toBe('moved@example.test')
+        ->and($encoder->fresh()->email_verified_at)->not->toBeNull();
+
+    // An account that was already left unverified is freed by saving it, since nothing could ever verify it by mail.
+    $encoder->forceFill(['email_verified_at' => null])->save();
+    $this->actingAs($encoder->fresh())->get(route('dashboard'))->assertRedirect(route('verification.notice'));
+
+    $this->actingAs($this->superAdmin)->put(route('admin.users.update', $encoder), [
+        'name' => $encoder->name, 'email' => 'moved@example.test', 'role' => 'user', 'barangay_id' => $this->mine->id, 'password' => '',
+    ])->assertSessionHasNoErrors();
+
+    $this->actingAs($encoder->fresh())->get(route('dashboard'))->assertOk();
+});
+
 it('names admins and encoders from where they work and ignores a typed name', function () {
     $municipality = Municipality::factory()->create(['name' => 'Bacolor']);
     $sanJose = Barangay::factory()->create(['municipality_id' => $municipality->id, 'name' => 'San Jose']);

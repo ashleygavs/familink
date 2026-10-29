@@ -328,6 +328,7 @@ Mexico (San Jose Malino) and San Luis (Sta. Monica) have no residents, household
 - [ ] On a phone, the menu button at the top left is a full-size square, and the header shows the shield logo, the role badge and the Log Out button without any words overlapping.
 - [ ] Start registering a resident (type a name, do not finish), then wait for the session to expire or open the login page in the same tab. Expected: after logging in again, **Register Resident** starts empty. A saved half-filled form never stays on a logged-out screen.
 - [ ] In **Settings > Security**, change the password to the same password you have now. Expected: "Please choose a password you have not been using." A different password works.
+- [ ] In **Settings > Profile**, you can change your name, but the email is shown greyed out with a note to ask a super admin or your admin. Expected: nothing on this page can lock you out. An email is changed only on the Staff accounts page, by a super admin (anyone) or an admin (encoders of their barangay), and the account stays signed-in-able afterwards.
 - [ ] Two encoders scanning the same household in two browsers at once: only one claim succeeds.
 - [ ] The register stepper works on a phone-width window (about 400 pixels).
 
