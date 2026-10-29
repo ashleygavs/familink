@@ -400,6 +400,11 @@ The mysql tool prints a harmless `--ssl-verify-server-cert` warning here. Afterw
 
 **Looking at the database.** Open **HeidiSQL** from the Start menu and make a connection to host `127.0.0.1`, port `3307`, user `familink_app`. The app user's password is in `.env` (`DB_PASSWORD`). It is not kept anywhere in the repository. The app user can see only the `familink` and `familink_test` databases. `familink_test` is used by the tests that check the real database engine; it can be emptied at any time. XAMPP's phpMyAdmin shows only the old MySQL on port 3306.
 
+**The database scripts** are kept in the project, in `scripts\database`, so a new computer or the live server can be set up the same way. None of them contain a password. Run them in PowerShell with `powershell -NoProfile -ExecutionPolicy Bypass -File <script>`:
+- `setup-familink-mariadb.ps1` creates the `familink` and `familink_test` databases and the limited app user, and can import an export and compare every table with the old server (see the examples at the top of the file). It asks for the root password.
+- `backup-familink.ps1` is the daily backup. It reads the connection from `.env`. The scheduled task on this computer runs its own copy in `Documents\familink-backups`, so it keeps working even if the project folder moves; on a new computer, point a scheduled task at the project's copy.
+- `harden-mariadb.ps1` makes the database answer only the computer it is on, disables a spare Oracle MySQL service, and removes the sample `test` database. Run it as administrator.
+
 Put the test scenario back (adds anything missing, never duplicates):
 ```powershell
 php artisan db:seed
